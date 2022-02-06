@@ -12,8 +12,6 @@ import sys
 import numpy as np
 import pandas as pd
 
-
-
 # %%
 
 
@@ -34,14 +32,13 @@ def parse_csv(data_path,type_lst):
     
     df = pd.read_csv(os.path.normpath(data_path+"metadata.csv"))  
 
-    df = df[df["Series Description"].str.contains("|".join(type_lst))][["Subject ID","Series Description","Study Date","File Location"]]
+    df = df[df["Series Description"].str.contains("|".join(type_lst))][["Series UID","Subject ID","Series Description","Study Date","File Location"]]
 
     df["Tag"] = df["Series Description"].str.extract(f"({'|'.join(type_lst)})", expand=False).fillna(df["Series Description"])
 
     df = df.assign(helpkey=
             df["File Location"].apply(lambda x: int(os.path.splitext(os.path.basename(x))[0])))\
             .sort_values('helpkey').drop('helpkey',axis = 1)
-
 
     df = df.groupby(["Subject ID","Study Date","Tag"]).first().sort_values(["Subject ID","Study Date","Tag"],ascending=[True,False,False])
 
@@ -53,71 +50,43 @@ def parse_csv(data_path,type_lst):
     return df.reset_index()
 
 
-
-
-
 data_path = "../Data/manifest-A3Y4AE4o5818678569166032044/"
 
 type_lst = ["t2tsetra","ADC"]
 
 patient_df = parse_csv(data_path,type_lst)
 
-#patient_df.to_clipboard()
-
-patient_df
 
 # %%
 
-def extract_dicom_paths(patient_df):
+def load_and_normalize(patient_df):
 
 
+    for index, patient in patient_df.iterrows():
 
-    paths = patient_df["File Location"].tolist()
+      
 
-
-
-    for path in paths:
-
-        reader = sitk.ImageSeriesReader
-        sorted_file_names = reader.GetGDCMSeriesFileNames(path)
+        reader = sitk.ImageSeriesReader()
+        
 
 
+        reader.SetFileNames(reader.GetGDCMSeriesFileNames(directory = patient["File Location"], seriesID = patient["Series UID"])[::-1]) #Includes UID in case of multiple dicom sets in the folder #ascending order
+
+        image_series = reader.Execute()
 
 
-        print(sorted_file_names)
+        img_array = sitk.GetArrayViewFromImage(image_series)
 
-        # Read the bulk pixel data
-        for i in sorted_file_names:
-            img = sitk.ReadImage(i)
+    return image_series
 
+    
 
-            img_array = sitk.GetArrayViewFromImage(img)
-
-
-            img_array = img_array[0,:,:]
-            plt.imshow(img_array,cmap="gray")
-            plt.show()
+asd = load_and_normalize(patient_df[0:1])
 
 
+print(asd)
 
 
-        # with os.scandir(path) as listOfEntries:
-            
-            
-        #     for entry in sorted(listOfEntries, key=lambda x: x.name):
-        #         # print all entries that are files
-        #         #if entry.is_file():
-        #         if entry.name.endswith('.dcm'):
-        #             print(entry.name)
-        # print("\n")
-  
-
-    #for root,dirs,files in os.walk(paths):
-    #    print(files)
-
-    return 2
-
-extract_dicom_paths(patient_df[0:1])
 
 # %%
 
