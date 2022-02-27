@@ -1,31 +1,49 @@
-# %%
-
-from attr import asdict
-from matplotlib import image
+### Importing libraries ###
 import matplotlib.pyplot as plt
 import SimpleITK as sitk
 
 import os
 import time
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
 
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow import keras
-import tensorflow as tf
-
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
-from urllib3 import add_stderr_logger
 
-from copy import copy, deepcopy
+### GPU Cluster setup ###
 
+# IMPORTANT NOTE FOR USERS RUNNING UiS GPU CLUSTERS:
+# IF USING SLURM, AVOID SPECIFY GPU (automatic discovery feature of slurm)
+
+## The variable CUDA_VISIBLE_DEVICES will restrict what devices Tensorflow can see. By setting this to, e.g. 2, only GPU device #2 is available. The number used here should match the one used when reserved the GPU.
+##os.environ['CUDA_VISIBLE_DEVICES'] = 'assigned gpu id'
+
+# The variable TF_CPP_MIN_LOG_LEVEL sets the debugging level of Tensorflow and controls what messages are displayed onscreen. Defaults value is set to 0, so all logs are shown. Set TF_CPP_MIN_LOG_LEVEL to 1 to filter out INFO logs, 2 to additional filter out WARNING, and 3 to additionally filter out ERROR. Disable debugging information from tensorflow. 
+
+#TF_CPP_MIN_VLOG_LEVEL brings in extra debugging information, and in reverse. Its default value is 0 and as it increases, more debugging messages are logged in.
+os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
+os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '2'
+
+# By setting config.gpu_options.allow_growth to True, Tensorflow will only grab as much GPU-memory as needed. If additional memory is required later in the code, Tensorflow will allocate more memory as needed. This allows the user to run two or three programs on the same GPU.
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.Session(config = config)
+
+# Deprecation removes deprecated warning messages
+from tensorflow.python.framework import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = True
+
+# Seed for reproducibility
 np.random.seed(42)
 
-# %%
+### Functions ###
 
-### img display ###
+### Img display ###
 
 def display(data):
     """
@@ -106,7 +124,7 @@ def parse_csv(data_path,type_lst):
 
     # Change the file location to include the whole system path, as well as normalize the path to the correct os path separator
     # If there are problems with loading the files, check if the filepath is correct within the dataframe compared the file path in the os.
-    df["File Location"] = df["File Location"].apply(lambda x: os.path.normpath(data_path+x)) #abspath
+    df["File Location"] = df["File Location"].apply(lambda x: os.path.normpath(data_path+x)) #abspath   
 
     print(f"The series contains following number of each type:\n{df.groupby(['tag']).size().to_string()}")
 
@@ -129,7 +147,7 @@ def load_slices(data_path,tags):
 
     patients_df = parse_csv(data_path,tags)
 
-    patients_df = patients_df[:10].reset_index()
+    #patients_df = patients_df[:10].reset_index()
     
     # Assigning empty array with shape = (number of patients,number of modalities), in our case (346,2)
     patients_arr = np.empty(shape=(np.ceil(len(patients_df)/len(patients_df["tag"].unique())).astype(int),len(patients_df["tag"].unique())),dtype=object)
@@ -356,6 +374,9 @@ def image_to_np_reshape(train_test_val_split,patients_df):
     patients_df.drop(columns="idx", inplace=True)
 
     print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
+
+    #TODO: expand dims here
+
     return output
 
 
@@ -398,6 +419,97 @@ def expand_dims(array_lst):
     else: return array_lst[0]
 
 
+### Model building ###
+
+
+def get_model(dim, name="autoencoder"):
+    """
+    It creates a model that accepts a 3D input of shape (width, height, depth, 1) and returns a 3D
+    output of the same shape.
+    
+    :param dim: The shape of the input data
+    :param name: The Model's name
+    :return: The autoencoder model
+    """
+    # shape = (width, height, depth, 1)
+    inputs = keras.Input(shape=(dim[1], dim[2], dim[3], 1))
+
+    # Encoder
+    x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(inputs)
+    x = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
+    x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(x)
+    encoded = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
+
+    # Decoder
+    x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(encoded)
+    x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(x)
+    decoded = layers.Conv3D(1, (3, 3, 3), activation="sigmoid", padding="same")(x)
+
+    # Autoencoder
+    autoencoder = Model(inputs, decoded, name=name)
+    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+    autoencoder.summary()
+    return autoencoder
+
+
+def train_model(model, x_data, y_data):
+    """
+    Function to train the model.
+    
+    :param model: The model to train
+    :param x_data: The training data
+    :param y_data: The labels for the training data
+    :return: The trained model.
+    """
+    # Define callbacks.
+    checkpoint_cb = keras.callbacks.ModelCheckpoint(f"{model.name} - 3d_image_classification.h5", save_best_only=True)
+    early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_acc", patience=15)
+
+    model.fit(
+        x=x_data,
+        y=y_data,
+        epochs=50,
+        batch_size=128,
+        shuffle=True,
+        verbose=1,
+        validation_data=(x_data, y_data),
+        callbacks=[checkpoint_cb, early_stopping_cb],
+    )
+
+    print("Train accuracy :\t", round (model.history['acc'][0], 4))
+
+    return model
+
+def model_building(patients_df: pd.DataFrame, modality: str, x_data, y_data ):
+    """
+    Given a dataframe of patients, a modality (e.g. "ct"), and the corresponding x and y data, 
+    this function returns a trained model for the modality
+    
+    :param patients_df: The dataframe containing the patient data
+    :type patients_df: pd.DataFrame
+    :param modality: The modality you want to train the model on
+    :type modality: str
+    :param x_data: The x-data is the input data for the model. In this case, it's the MRI images
+    :param y_data: The target data
+    :return: The model
+    """
+    # adc_shape,adc_idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains("adc", case=False)].values[0]
+    # adc_model = get_model(adc_shape, "adc_model")
+    # adc_model = train_model(adc_model,x_data[adc_idx], x_data )
+
+    # t2_shape,t2_idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains("t2tsetra", case=False)].values[0]
+    # t2_model = get_model(t2_shape, "t2_model")
+    # t2_model = train_model(t2_model,x_data[t2_idx], x_data )
+
+
+
+    shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
+    model = get_model(shape, f"{modality}_model")
+    model = train_model(model,x_data[idx], y_data)
+
+    return model
+
+
 ### Main functions ###
 
 def preprocess(data_path, tags):
@@ -432,9 +544,16 @@ def preprocess(data_path, tags):
     return pat_slices, pat_df
 
 
-##%%
 
 def data_augmentation(pat_slices, pat_df):
+    """
+    This function takes in the patient slices and the patient dataframe and returns the train, test and
+    validation data
+    
+    :param pat_slices: The list of slices that we have extracted from the patients
+    :param pat_df: The dataframe containing the patient id's of the slices
+    :return: the training, test and validation data sets.
+    """
 
     print(f"Data augmentation started".center(50, '_'))
     start_time = time.time()
@@ -446,182 +565,57 @@ def data_augmentation(pat_slices, pat_df):
     
     x_train_noisy = noise(x_train)
     x_test_noisy = noise(x_test)
+    x_val_noisy = noise(x_test)
 
     # display([x_train[1][0],x_train_noisy[1][0]])
-    x_train, x_test, x_val, x_train_noisy, x_test_noisy = expand_dims([x_train, x_test, x_val, x_train_noisy, x_test_noisy])
+    x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy])
 
     print("\n"+f"Data augmentation {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
-    return x_train, x_test, x_val, x_train_noisy, x_test_noisy
+    return x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy
 
 
 
 
 
-def get_model(dim, name="autoencoder"):
-    # shape = (width, height, depth, 1)
-    inputs = keras.Input(shape=(dim[1], dim[2], dim[3], 1))
-
-    # Encoder
-    x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(inputs)
-    x = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
-    x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(x)
-    encoded = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
-
-    # Decoder
-    x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(encoded)
-    x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(x)
-    decoded = layers.Conv3D(1, (3, 3, 3), activation="sigmoid", padding="same")(x)
-
-    # Autoencoder
-    autoencoder = Model(inputs, decoded, name=name)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
-    autoencoder.summary()
-    return autoencoder
-
-def build_model(model, x_data, y_data):
-    # Define callbacks.
-    checkpoint_cb = keras.callbacks.ModelCheckpoint(f"{model.name} - 3d_image_classification.h5", save_best_only=True)
-    early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_acc", patience=15)
-
-    model.fit(
-        x=x_data,
-        y=y_data,
-        epochs=50,
-        batch_size=128,
-        shuffle=True,
-        verbose=1,
-        validation_data=(x_data, y_data),
-        callbacks=[checkpoint_cb, early_stopping_cb],
-    )
-    return model
-
-def model_building(pat_slices, pat_df):
-
-    adc_shape,adc_idx = df[["dim","tag_idx"]][df.tag.str.contains("adc", case=False)].values[0]
-    adc_model = get_model(adc_shape, "adc_model")
-    adc_model = build_model(adc_model,x_train_noisy[adc_idx], x_train )
-
-    t2_shape,t2_idx = df[["dim","tag_idx"]][df.tag.str.contains("t2tsetra", case=False)].values[0]
-    t2_model = get_model(t2_shape, "t2_model")
-    t2_model = build_model(t2_model,x_train_noisy[t2_idx], x_train )
-    return
 
 def main():
     data_path = "../Data/manifest-A3Y4AE4o5818678569166032044/"
-    tags = {"ADC":(123,123,12),"t2tsetra": (320,320,20)} 
+    tags = {"ADC": None,"t2tsetra": (320,320,20)} 
 
     pat_slices, pat_df = preprocess(data_path,tags)
-    x_train, x_test, x_val, x_train_noisy, x_test_noisy = data_augmentation(pat_slices, pat_df)
+    x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = data_augmentation(pat_slices, pat_df)
     del pat_slices
 
+    t2_model = model_building(pat_df, "t2", x_train_noisy, x_train)
+    t2_model.save("t2_model")
+
+    #test_result = t2_model.evaluate(x_test,y_test, verbose = 1)
+    #print("Test accuracy :\t", round (test_result[1], 4))
+
+    # predictions = t2_model.predict(x_test[1])
+    # display([x_test[1], predictions])
+
+    # predictions = t2_model.predict(x_test_noisy[1])
+    # display([x_test_noisy[1], predictions])
+
+    # predictions = t2_model.predict(x_val[1])
+    # display([x_val[1], predictions])
+
+
+    # predictions = t2_model.predict(x_val_noisy[1])
+    # display([x_val_noisy[1], predictions])
+
+    # predictions = t2_model.predict(x_val_noisy[1])
+    # display([x_val_noisy[1], predictions])
 
     return pat_df, x_train, x_test, x_val, x_train_noisy, x_test_noisy
 
 
+# df, x_train, x_test, x_val, x_train_noisy, x_test_noisy = main()
 
-
-df, x_train, x_test, x_val, x_train_noisy, x_test_noisy = main()
-
-
-# %%
-
-#%%
-
-
-
-# %%
-
-
-
-
-# %%
-
-# Define callbacks.
-checkpoint_cb = keras.callbacks.ModelCheckpoint(
-    "3d_image_classification.h5", save_best_only=True
-)
-early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_acc", patience=15)
-
-
-qwe_train = x_train[0]
-qwe_test  = x_test[0]
-
-adc_model.fit(
-    x=qwe_train,
-    y=qwe_train,
-    epochs=50,
-    batch_size=128,
-    shuffle=True,
-    verbose=1,
-    validation_data=(qwe_test, qwe_test),
-    callbacks=[checkpoint_cb, early_stopping_cb],
-)
-
-# %%
-
-
-predictions = adc_model.predict(x_test[0])
-display([x_test[0], predictions])
-
-predictions = t2_model.predict(x_test[1])
-display([x_test[1], predictions])
-
-
-# %%
-
-
-# Define callbacks.
-checkpoint_cb = keras.callbacks.ModelCheckpoint(
-    "3d_image_classification.h5", save_best_only=True
-)
-early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_acc", patience=15)
-
-
-qwe_train = x_train[1]
-qwe_test  = x_test[1]
-qwe_train_noisy = x_train_noisy[1]
-qwe_test_noisy = x_test_noisy[1]
-
-t2_model.fit(
-    x=qwe_train_noisy,
-    y=qwe_train,
-    epochs=100,
-    batch_size=128,
-    shuffle=True,
-    verbose=1,
-    validation_data=(qwe_test_noisy, qwe_test),
-    callbacks=[checkpoint_cb, early_stopping_cb],
-)
-
-
-# %%
-
-# Define callbacks.
-checkpoint_cb = keras.callbacks.ModelCheckpoint(
-    "3d_image_classification.h5", save_best_only=True
-)
-early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_acc", patience=15)
-
-
-qwe_train = x_train[0]
-qwe_test  = x_test[0]
-
-adc_model.fit(
-    x=qwe_train_noisy,
-    y=qwe_train,
-    epochs=100,
-    batch_size=128,
-    shuffle=True,
-    verbose=1,
-    validation_data=(qwe_test_noisy, qwe_test),
-    callbacks=[checkpoint_cb, early_stopping_cb],
-)
-# %%
-
-predictions = adc_model.predict(x_test[0])
-display([x_test[0], predictions])
-
-predictions = t2_model.predict(x_test[1])
-display([x_test[1], predictions])
+if __name__ == '__main__':
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+    print(tf.config.list_physical_devices('GPU'))
+    main()
 
