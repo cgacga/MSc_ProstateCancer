@@ -1,0 +1,14 @@
+name: pca_env
+channels:
+  - anaconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python
+  - tensorflow-gpu
+  - scikit-learn
+  - simpleitk
+  - matplotlib
+  - numpy
+  - pandas
+  - pip
