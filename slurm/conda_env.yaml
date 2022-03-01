@@ -1,4 +1,4 @@
-name: pca_env
+name: pca_env_tfpgu
 channels:
   - anaconda
   - conda-forge
