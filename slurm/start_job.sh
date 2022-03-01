@@ -2,9 +2,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=gpuA100 
 #SBATCH --time=15:15:00
-#SBATCH --job-name=job_run
-#SBATCH --output=../log/%x.%j.out
-#SBATCH --error=../log/%x.%j.err
+#SBATCH --job-name=job_bs2
+#SBATCH --output=../log/%x_%j.out
+#SBATCH --error=../log/%x_%j.err
  
 # Activate environment
 uenv verbose cuda-11.4 cudnn-11.4-8.2.4
