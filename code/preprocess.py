@@ -70,7 +70,7 @@ def load_slices(data_path,tags):
 
     patients_df = parse_csv(data_path,tags)
 
-    patients_df = patients_df[:10].reset_index()
+    #patients_df = patients_df[:10].reset_index()
     
     # Assigning empty array with shape = (number of patients,number of modalities), in our case (346,2)
     patients_arr = np.empty(shape=(np.ceil(len(patients_df)/len(patients_df["tag"].unique())).astype(int),len(patients_df["tag"].unique())),dtype=object)

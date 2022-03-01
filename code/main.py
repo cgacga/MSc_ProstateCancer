@@ -33,6 +33,7 @@ config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth=True
 session = tf.compat.v1.Session(config=config)
 
+
 # Deprecation removes deprecated warning messages
 # from tensorflow.python.framework import deprecation
 # deprecation._PRINT_DEPRECATION_WARNINGS = True
@@ -127,7 +128,7 @@ def model_building(patients_df: pd.DataFrame, modality: str, x_data, y_data ):
     shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
     model = get_model(shape, f"{modality}_model")
     print(x_data[idx].shape)
-    #model = train_model(model,x_data[idx], y_data[idx])
+    model = train_model(model,x_data[idx], y_data[idx])
     
     print("\n"+f"{modality} - Model building finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
@@ -143,11 +144,12 @@ def main():
     tags = {"t2tsetra": (320,320,20)} 
 
     pat_slices, pat_df = preprocess(data_path,tags)
-    x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = data_augmentation(pat_slices, pat_df)
+    # x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = data_augmentation(pat_slices, pat_df)
+    x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
     del pat_slices
 
     t2_model = model_building(pat_df, "t2", x_train_noisy, x_train)
-    # t2_model.save("t2_model")
+    t2_model.save("t2_model")
 
     #test_result = t2_model.evaluate(x_test,y_test, verbose = 1)
     #print("Test accuracy :\t", round (test_result[1], 4))
@@ -175,10 +177,10 @@ def main():
 # df, x_train, x_test, x_val, x_train_noisy, x_test_noisy = main()
 
 if __name__ == '__main__':
-    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-    print(tf.config.list_physical_devices('GPU'))
-    # print(os.environ["SLURM_PROCID"])
-    # print(os.environ["SLURM_NPROCS"])
+    print(f"Num GPUs Available: {len(tf.config.list_physical_devices('GPU'))}")    
+    print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
+    print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
+    
     main()
 
 

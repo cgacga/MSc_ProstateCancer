@@ -1,11 +1,10 @@
-name: pca_env_tfpgu
+name: pca_env_tf
 channels:
-  - anaconda
   - conda-forge
   - defaults
 dependencies:
   - python
-  - tensorflow-gpu
+  - tensorflow
   - scikit-learn
   - simpleitk
   - matplotlib

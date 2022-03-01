@@ -54,15 +54,18 @@ def train_model(model, x_data, y_data):
     checkpoint_cb = keras.callbacks.ModelCheckpoint(f"{model.name} - 3d_image_classification.h5", save_best_only=True)
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_acc", patience=15)
 
-    batch_size = 8
+    batch_size = 2
+    #32 -> 34147MiB / 40536MiB (error)
+    #16 ->  34147MiB / 40536MiB (no error)
+    #8  -> 17819MiB / 40536MiB
     print(f"Batch size = {batch_size}")
     
     model.fit(
         x=x_data,
         y=y_data,
         epochs=50,
-        batch_size=32,
-        verbose=2,
+        batch_size=batch_size,
+        verbose=1,
         validation_data=(x_data, y_data),
         callbacks=[checkpoint_cb, early_stopping_cb],
     )
