@@ -239,3 +239,35 @@ def normalize(patients_arr,patients_df):
     print(f"\nNormalization finished {(time.time() - start_time):.0f} s")
     return patients_arr
 
+
+def preprocess(data_path, tags):
+    """
+    Loads the slices from the data path, resamples the slices to the desired resolution, normalizes the
+    slices and returns the resampled slices and the dataframe
+
+    If size is set to None, then the most common size will be used
+        Examples:
+            tags = {"ADC":(86,128,20),"t2tsetra": (320,320,20)} 
+
+            tags = {"T2TSETRA": (320,320,20), "adc": None} 
+
+            tags = {"ADC": None}     
+    
+    :param data_path: path to the folder containing the data
+    :param tags: a dictionary of tags and their corresponding sizes
+    :return: the preprocessed slices and the dataframe with the metadata.
+    """
+
+    print(f"Preprocess started".center(50, '_'))
+    start_time = time.time()
+
+    pat_slices, pat_df = load_slices(data_path, tags)
+
+    pat_slices, pat_df = resample_pat(pat_slices, pat_df, tags)
+
+    pat_slices = normalize(pat_slices, pat_df)
+        
+    print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
+
+    return pat_slices, pat_df
+

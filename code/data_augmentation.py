@@ -117,3 +117,35 @@ def expand_dims(array_lst):
     if lst: return array_lst
     else: return array_lst[0]
 
+
+
+def data_augmentation(pat_slices, pat_df):
+    """
+    This function takes in the patient slices and the patient dataframe and returns the train, test and
+    validation data
+    
+    :param pat_slices: The list of slices that we have extracted from the patients
+    :param pat_df: The dataframe containing the patient id's of the slices
+    :return: the training, test and validation data sets.
+    """
+
+    print(f"Data augmentation started".center(50, '_'))
+    start_time = time.time()
+    x_train, x_test, x_val  = train_test_validation(pat_slices, pat_df, 0.7,0.2,0.1)
+
+    # Reduce footprint by overwriting the array
+    pat_slices[:] = None #del pat_slices outside of function
+
+    x_train, x_test, x_val  = image_to_np_reshape([x_train, x_test, x_val],pat_df)
+    
+    x_train_noisy = noise(x_train)
+    x_test_noisy = noise(x_test)
+    x_val_noisy = noise(x_test)
+
+    # display([x_train[1][0],x_train_noisy[1][0]])
+    x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy])
+
+    print("\n"+f"Data augmentation {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
+
+    return x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy
+

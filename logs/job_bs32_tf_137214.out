@@ -1,0 +1,219 @@
+CUDA is a parallel computing platform for computing on GPUs, https://developer.nvidia.com/cuda-toolkit
+prepending to __UENV: cuda-11.4
+setting env CUDA_HOME=/usr/local/cuda-11.4
+prepending to PATH: /usr/local/cuda-11.4/bin
+prepending to LD_LIBRARY_PATH: /usr/local/libcudnn-11.4-8.2.4/lib64
+
+A GPU-accelerated library of primitives for deep neural networks, https://developer.nvidia.com/cudnn
+prepending to __UENV: cudnn-11.4-8.2.4
+prepending to LD_LIBRARY_PATH: /usr/local/libcudnn-11.4-8.2.4/lib64
+
+Activate conda to use an environment: run "conda activate" or "conda activate {environment_name}"
+Num GPUs Available: 1
+SLURM_JOB_NAME - job_bs32_tf
+SLURM_JOB_ID - 137214
+________________Preprocess started________________
+
+..................Loading slices..................
+Loading the following:
+tag
+t2tsetra    346
+Loading finished 197 s
+
+....................Resampling....................
+
+      ~Selecting resolution for resampling~       
+
+Current resolution in the series pr modality:
+                         count
+tag      dim                  
+t2tsetra (384, 384, 19)    149
+         (384, 384, 21)     90
+         (384, 384, 23)     34
+         (320, 320, 19)     28
+         (320, 320, 21)     18
+         (320, 320, 23)      8
+         (384, 384, 25)      7
+         (320, 320, 25)      2
+         (320, 320, 20)      1
+         (320, 320, 22)      1
+         (320, 320, 27)      1
+         (384, 384, 18)      1
+         (384, 384, 20)      1
+         (384, 384, 22)      1
+         (384, 384, 24)      1
+         (384, 384, 27)      1
+         (384, 384, 29)      1
+         (640, 640, 27)      1
+
+Chosen resampling dimension of each modality:
+     tag     resize_dim
+t2tsetra (320, 320, 20)
+
+               ~Resamplig started~                
+
+   ~Resampling ended, checking new resolution~    
+
+Current resolution in the series pr modality:
+                         count
+tag      dim                  
+t2tsetra (320, 320, 20)    346
+
+Resampling finished 4 s
+
+..................Normalization...................
+
+Normalization finished 10 s
+
+___________Preprocess finished 00:03:31___________
+
+____________Data augmentation started_____________
+
+....................Splitting.....................
+
+|	Train	|	Test	|	Val	|
+|	70%	|	20%	|	10%	|
+|	241	|	70	|	35	|
+
+..Converting sitk image to np.array and reshape...
+
+Conversion and reshape finished 4 s
+
+...................Adding noise...................
+
+...................Adding noise...................
+
+...................Adding noise...................
+
+____________Data augmentation 00:00:43____________
+
+___________t2 - Model building started____________
+
+.............t2_model - compile model.............
+Model: "t2_model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 320, 320, 20, 1)  0         
+                             ]                                   
+                                                                 
+ conv3d (Conv3D)             (None, 320, 320, 20, 32)  896       
+                                                                 
+ max_pooling3d (MaxPooling3D  (None, 160, 160, 10, 32)  0        
+ )                                                               
+                                                                 
+ conv3d_1 (Conv3D)           (None, 160, 160, 10, 32)  27680     
+                                                                 
+ max_pooling3d_1 (MaxPooling  (None, 80, 80, 5, 32)    0         
+ 3D)                                                             
+                                                                 
+ conv3d_transpose (Conv3DTra  (None, 160, 160, 10, 32)  27680    
+ nspose)                                                         
+                                                                 
+ conv3d_transpose_1 (Conv3DT  (None, 320, 320, 20, 32)  27680    
+ ranspose)                                                       
+                                                                 
+ conv3d_2 (Conv3D)           (None, 320, 320, 20, 1)   865       
+                                                                 
+=================================================================
+Total params: 84,801
+Trainable params: 84,801
+Non-trainable params: 0
+_________________________________________________________________
+None
+(241, 320, 320, 20, 1)
+
+...........t2_model - training started............
+Batch size = 32
+Epoch 1/50
+2022-03-01 12:31:32.113973: W tensorflow/core/kernels/gpu_utils.cc:49] Failed to allocate memory for convolution redzone checking; skipping this check. This is benign and only means that we won't check cudnn for out-of-bounds reads and writes. This message will only be printed once.
+2022-03-01 12:31:55.109565: W tensorflow/core/common_runtime/bfc_allocator.cc:462] Allocator (GPU_0_bfc) ran out of memory trying to allocate 7.81GiB (rounded to 8388608000)requested by op t2_model/conv3d_transpose_1/conv3d_transpose
+If the cause is memory fragmentation maybe the environment variable 'TF_GPU_ALLOCATOR=cuda_malloc_async' will improve the situation. 
+Current allocation summary follows.
+Current allocation summary follows.
+2022-03-01 12:31:55.110894: W tensorflow/core/common_runtime/bfc_allocator.cc:474] *******************************_________****______****************************************_*********
+2022-03-01 12:31:55.116300: W tensorflow/core/framework/op_kernel.cc:1745] OP_REQUIRES failed at conv_grad_ops_3d.cc:1275 : RESOURCE_EXHAUSTED: OOM when allocating tensor with shape[32,32,320,320,20] and type float on /job:localhost/replica:0/task:0/device:GPU:0 by allocator GPU_0_bfc
+Traceback (most recent call last):
+  File "/mnt/beegfs/home/cga2022/jobs/slurm/../code/main.py", line 184, in <module>
+    main()
+  File "/mnt/beegfs/home/cga2022/jobs/slurm/../code/main.py", line 151, in main
+    t2_model = model_building(pat_df, "t2", x_train_noisy, x_train)
+  File "/mnt/beegfs/home/cga2022/jobs/slurm/../code/main.py", line 131, in model_building
+    model = train_model(model,x_data[idx], y_data[idx])
+  File "/mnt/beegfs/home/cga2022/jobs/code/model_building.py", line 63, in train_model
+    model.fit(
+  File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 67, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/tensorflow/python/eager/execute.py", line 58, in quick_execute
+    tensors = pywrap_tfe.TFE_Py_Execute(ctx._handle, device_name, op_name,
+tensorflow.python.framework.errors_impl.ResourceExhaustedError:  OOM when allocating tensor with shape[32,32,320,320,20] and type float on /job:localhost/replica:0/task:0/device:GPU:0 by allocator GPU_0_bfc
+	 [[node t2_model/conv3d_transpose_1/conv3d_transpose
+ (defined at /home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/layers/convolutional.py:1626)
+]]
+Hint: If you want to see a list of allocated tensors when OOM happens, add report_tensor_allocations_upon_oom to RunOptions for current allocation info. This isn't available when running in Eager mode.
+ [Op:__inference_train_function_1095]
+
+Errors may have originated from an input operation.
+Input Source operations connected to node t2_model/conv3d_transpose_1/conv3d_transpose:
+In[0] t2_model/conv3d_transpose_1/stack (defined at /home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/layers/convolutional.py:1621)	
+In[1] t2_model/conv3d_transpose_1/conv3d_transpose/ReadVariableOp:	
+In[2] t2_model/conv3d_transpose/Relu (defined at /home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/backend.py:4855)
+
+Operation defined at: (most recent call last)
+>>>   File "/mnt/beegfs/home/cga2022/jobs/slurm/../code/main.py", line 42, in <module>
+>>>     np.random.seed(42)
+>>> 
+>>>   File "/mnt/beegfs/home/cga2022/jobs/slurm/../code/main.py", line 148, in main
+>>>     x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
+>>> 
+>>>   File "/mnt/beegfs/home/cga2022/jobs/slurm/../code/main.py", line 128, in model_building
+>>>     shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
+>>> 
+>>>   File "/mnt/beegfs/home/cga2022/jobs/code/model_building.py", line 55, in train_model
+>>>     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 60, in error_handler
+>>>     return fn(*args, **kwargs)
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/training.py", line 1168, in fit
+>>>     y=y,
+>>> 
+>>>   File "/tmp/__autograph_generated_file5mon5yhc.py", line 12, in tf__train_function
+>>>     retval_ = ag__.UndefinedReturnValue()
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/training.py", line 866, in step_function
+>>>     data = next(iterator)
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/training.py", line 860, in run_step
+>>>     outputs = model.train_step(data)
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/training.py", line 807, in train_step
+>>>     with tf.GradientTape() as tape:
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 60, in error_handler
+>>>     return fn(*args, **kwargs)
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/base_layer.py", line 1054, in __call__
+>>>     self._clear_losses()
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 91, in error_handler
+>>>     try:
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/functional.py", line 452, in call
+>>>     inputs, training=training, mask=mask)
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/functional.py", line 573, in _run_internal_graph
+>>>     tensor_dict[x_id] = [y] * tensor_usage_count[x_id]
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 60, in error_handler
+>>>     return fn(*args, **kwargs)
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/engine/base_layer.py", line 1054, in __call__
+>>>     self._clear_losses()
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 91, in error_handler
+>>>     try:
+>>> 
+>>>   File "/home/stud/cga2022/.conda/envs/pca_env_tf/lib/python3.10/site-packages/keras/layers/convolutional.py", line 1626, in call
+>>>     out_height = conv_utils.deconv_output_length(height,
+>>> 

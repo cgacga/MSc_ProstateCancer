@@ -1,5 +1,6 @@
 
 ### Model building ###
+import os
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -35,7 +36,10 @@ def get_model(dim, name="autoencoder"):
     autoencoder = Model(inputs, decoded, name=name)
     autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
 
+    print("summary")
     print(autoencoder.summary())
+    print("noprint summary")
+    autoencoder.summary()
     return autoencoder
 
 
@@ -51,12 +55,12 @@ def train_model(model, x_data, y_data):
     print("\n"+f"{model.name} - training started".center(50, '.'))
 
     # Define callbacks.
-    checkpoint_cb = keras.callbacks.ModelCheckpoint(f"{model.name} - 3d_image_classification.h5", save_best_only=True)
-    early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_acc", patience=15)
+    checkpoint_cb = keras.callbacks.ModelCheckpoint(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{model.name}-checkpoint.h5", save_best_only=True)
+    early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
-    batch_size = 2
+    batch_size = 8
     #32 -> 34147MiB / 40536MiB (error)
-    #16 ->  34147MiB / 40536MiB (no error)
+    #16 ->  34147MiB / 40536MiB (no error? check logs)
     #8  -> 17819MiB / 40536MiB
     print(f"Batch size = {batch_size}")
     
@@ -70,9 +74,36 @@ def train_model(model, x_data, y_data):
         callbacks=[checkpoint_cb, early_stopping_cb],
     )
 
-    print("\n"+f"{model.name} - Train accuracy:\t {round (model.history['acc'][0], 4)}".center(50, '.'))
+    # print("\n"+f"{model.name} - Train accuracy:\t {round (model.history['acc'][0], 4)}".center(50, '.'))
     
 
     return model
 
 
+
+def model_building(patients_df: pd.DataFrame, modality: str, x_data, y_data ):
+    """
+    Given a dataframe of patients, a modality (e.g. "ct"), and the corresponding x and y data, 
+    this function returns a trained model for the modality
+    
+    :param patients_df: The dataframe containing the patient data
+    :type patients_df: pd.DataFrame
+    :param modality: The modality you want to train the model on
+    :type modality: str
+    :param x_data: The x-data is the input data for the model. In this case, it's the MRI images
+    :param y_data: The target data
+    :return: The model
+    """
+    print(f"{modality} - Model building started".center(50, '_'))
+    start_time = time.time()
+
+    shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
+    model = get_model(shape, f"{modality}")
+    
+    model = train_model(model,x_data[idx], y_data[idx])
+    
+    model.save(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}")
+
+    print("\n"+f"{modality} - Model building finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
+
+    return model
