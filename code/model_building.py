@@ -5,6 +5,8 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
+import pandas as pd
+import time
 
 def get_model(dim, name="autoencoder"):
     """
@@ -34,7 +36,11 @@ def get_model(dim, name="autoencoder"):
 
     # Autoencoder
     autoencoder = Model(inputs, decoded, name=name)
-    autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+    opt = tf.keras.optimizers.Adam()
+    learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
+    opt.lr.assign(learning_rate)
+    # print(f"Learning rate = {opt.lr.numpy()}")
+    autoencoder.compile(opt, loss="binary_crossentropy")
 
     print("summary")
     print(autoencoder.summary())
@@ -58,7 +64,7 @@ def train_model(model, x_data, y_data):
     checkpoint_cb = keras.callbacks.ModelCheckpoint(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{model.name}-checkpoint.h5", save_best_only=True)
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
-    batch_size = 8
+    batch_size = 32
     #32 -> 34147MiB / 40536MiB (error)
     #16 ->  34147MiB / 40536MiB (no error? check logs)
     #8  -> 17819MiB / 40536MiB
@@ -98,7 +104,9 @@ def model_building(patients_df: pd.DataFrame, modality: str, x_data, y_data ):
     start_time = time.time()
 
     shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
-    model = get_model(shape, f"{modality}")
+    with tf.distribute.MirroredStrategy().scope():
+        model = get_model(shape, f"{modality}")
+    
     
     model = train_model(model,x_data[idx], y_data[idx])
     

@@ -2,9 +2,10 @@
 ### Importing libraries ###
 import os
 import time
+import sys
 import tensorflow as tf
 import numpy as np
-import pandas as pd
+
 
 from data_augmentation import *
 from preprocess import *
@@ -13,10 +14,8 @@ from model_building import *
 ### GPU Cluster setup ###
 
 # IMPORTANT NOTE FOR USERS RUNNING UiS GPU CLUSTERS:
-# IF USING SLURM, AVOID SPECIFY GPU (automatic discovery feature of slurm)
+# This script is made to be used with slurm workload manager. The slurm scheduling system will automatically assign gpus and this script will use all awailable GPU's. This script should not be run outside of slurm wihout changing parameters for building the model and compiling it.
 
-## The variable CUDA_VISIBLE_DEVICES will restrict what devices Tensorflow can see. By setting this to, e.g. 2, only GPU device #2 is available. The number used here should match the one used when reserved the GPU.
-##os.environ['CUDA_VISIBLE_DEVICES'] = 'assigned gpu id'
 
 # The variable TF_CPP_MIN_LOG_LEVEL sets the debugging level of Tensorflow and controls what messages are displayed onscreen. Defaults value is set to 0, so all logs are shown. Set TF_CPP_MIN_LOG_LEVEL to 1 to filter out INFO logs, 2 to additional filter out WARNING, and 3 to additionally filter out ERROR. Disable debugging information from tensorflow. 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
@@ -29,6 +28,8 @@ config.gpu_options.allow_growth=True
 session = tf.compat.v1.Session(config=config)
 
 
+
+
 # Deprecation removes deprecated warning messages
 # from tensorflow.python.framework import deprecation
 # deprecation._PRINT_DEPRECATION_WARNINGS = True
@@ -37,7 +38,7 @@ session = tf.compat.v1.Session(config=config)
 np.random.seed(42)
 
 
-def main():
+def main(**kwargs):
     start_time = time.time()
     data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
     #tags = {"ADC": None,"t2tsetra": (320,320,20)} 
@@ -48,9 +49,9 @@ def main():
     x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
     del pat_slices
 
-    models = np.array(len(tags.keys()))
-    for i,modality in enumerate(tags.keys()):
-        models[i] = model_building(pat_df, modality, x_train_noisy, x_train)
+    models = {}
+    for modality in tags.keys():
+        models[modality] = model_building(pat_df, modality, x_train_noisy, x_train)
     
 
     #test_result = t2_model.evaluate(x_test,y_test, verbose = 1)
@@ -83,6 +84,11 @@ if __name__ == '__main__':
     print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
     print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
     
-    main()
+    if len(sys.argv)>1:
+        print(sys.argv)
+        kwargs={kw[0]:kw[1] for kw in [ar.split('=') for ar in sys.argv if ar.find('=')>0]}
+        print(f"kwargs = {kwargs}")
+        # main(**kwargs)
+    else: main()
 
 
