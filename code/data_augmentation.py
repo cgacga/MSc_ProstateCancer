@@ -87,7 +87,7 @@ def noise(array):
         for j,patient in enumerate(modality):
             for k, img_array in enumerate(patient):
 
-                noise_factor = 0.1
+                noise_factor = 0.2
                 noisy_image = img_array + noise_factor * np.random.normal(
                     loc=0.0, scale=1.0, size=img_array.shape
                 )

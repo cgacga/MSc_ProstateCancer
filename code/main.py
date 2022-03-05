@@ -10,6 +10,7 @@ import numpy as np
 from data_augmentation import *
 from preprocess import *
 from model_building import *
+from img_display import *
 
 ### GPU Cluster setup ###
 
@@ -44,21 +45,42 @@ def main(**kwargs):
     #tags = {"ADC": None,"t2tsetra": (320,320,20)} 
     tags = {"t2tsetra": (320,320,20)} 
 
-    pat_slices, pat_df = preprocess(data_path,tags)
-    # x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = data_augmentation(pat_slices, pat_df)
-    x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
+    pat_slices, pat_df = preprocess(data_path,tags,False)
+    x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = data_augmentation(pat_slices, pat_df)
+    # x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
     del pat_slices
 
     models = {}
     for modality in tags.keys():
-        models[modality] = model_building(pat_df, modality, x_train_noisy, x_train)
+        modelpath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}"
+        shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality, case=False)].values[0]
+        train_data = tf.data.Dataset.from_tensor_slices((x_train_noisy[idx], x_train[idx]))
+        val_data = tf.data.Dataset.from_tensor_slices((x_test_noisy[idx], x_test[idx]))
+        models[modality] = model_building(shape, modelpath, train_data, val_data)
+
+        #test_save
+        img_pltsave([x_train_noisy[idx][0],x_train[idx][0]],modelpath+"test_saving.png")
+        
+        predictions = models[modality].predict(x_test_noisy[idx][0])
+        img_pltsave([x_test[idx][0], x_test_noisy[idx][0], predictions],modelpath+"test.png")
+        loss, acc = models[modality].evaluate(x_test_noisy[0], x_train[0], verbose=2)
+        
+        print(f"Test Loss {loss}\nTest Acc {acc}")
+        
+        predictions = models[modality].predict(x_val_noisy[idx][0])
+        img_pltsave([x_val[idx][0], x_val_noisy[idx][0], predictions],modelpath+"validation.png")
+
+        loss, acc = models[modality].evaluate(x_val_noisy[0], x_val[0], verbose=2)
+
+        print(f"Validation Loss {loss}\n Validation Acc {acc}")
+        
+    
     
 
     #test_result = t2_model.evaluate(x_test,y_test, verbose = 1)
     #print("Test accuracy :\t", round (test_result[1], 4))
 
-    # predictions = t2_model.predict(x_test[1])
-    # display([x_test[1], predictions])
+   
 
     # predictions = t2_model.predict(x_test_noisy[1])
     # display([x_test_noisy[1], predictions])
@@ -89,6 +111,6 @@ if __name__ == '__main__':
         kwargs={kw[0]:kw[1] for kw in [ar.split('=') for ar in sys.argv if ar.find('=')>0]}
         print(f"kwargs = {kwargs}")
         # main(**kwargs)
+        main()
     else: main()
-
 

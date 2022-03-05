@@ -54,7 +54,7 @@ def parse_csv(data_path,type_lst):
     return df.reset_index()
 
 
-def load_slices(data_path,tags):
+def load_slices(data_path,tags, nslices=False):
     """
     Given a path to the data, it loads the slices and stores them in a numpy array, if the Series Description contains the dictionary keys
     
@@ -70,7 +70,8 @@ def load_slices(data_path,tags):
 
     patients_df = parse_csv(data_path,tags)
 
-    #patients_df = patients_df[:10].reset_index()
+    if nslices:
+        patients_df = patients_df[:10].reset_index()
     
     # Assigning empty array with shape = (number of patients,number of modalities), in our case (346,2)
     patients_arr = np.empty(shape=(np.ceil(len(patients_df)/len(patients_df["tag"].unique())).astype(int),len(patients_df["tag"].unique())),dtype=object)
@@ -240,7 +241,7 @@ def normalize(patients_arr,patients_df):
     return patients_arr
 
 
-def preprocess(data_path, tags):
+def preprocess(data_path, tags, nslices = False):
     """
     Loads the slices from the data path, resamples the slices to the desired resolution, normalizes the
     slices and returns the resampled slices and the dataframe
@@ -261,7 +262,7 @@ def preprocess(data_path, tags):
     print(f"Preprocess started".center(50, '_'))
     start_time = time.time()
 
-    pat_slices, pat_df = load_slices(data_path, tags)
+    pat_slices, pat_df = load_slices(data_path, tags, nslices=nslices)
 
     pat_slices, pat_df = resample_pat(pat_slices, pat_df, tags)
 

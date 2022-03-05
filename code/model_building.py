@@ -42,14 +42,12 @@ def get_model(dim, name="autoencoder"):
     # print(f"Learning rate = {opt.lr.numpy()}")
     autoencoder.compile(opt, loss="binary_crossentropy")
 
-    print("summary")
     print(autoencoder.summary())
-    print("noprint summary")
-    autoencoder.summary()
+
     return autoencoder
 
 
-def train_model(model, x_data, y_data):
+def train_model(model, path, train_data, val_data):
     """
     Function to train the model.
     
@@ -61,22 +59,30 @@ def train_model(model, x_data, y_data):
     print("\n"+f"{model.name} - training started".center(50, '.'))
 
     # Define callbacks.
-    checkpoint_cb = keras.callbacks.ModelCheckpoint(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{model.name}-checkpoint.h5", save_best_only=True)
+    # checkpoint_cb = keras.callbacks.ModelCheckpoint(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{model.name}-checkpoint.h5", save_best_only=True)
+    checkpoint_cb = keras.callbacks.ModelCheckpoint(os.path.join(path,f"{model.name}-checkpoint.h5"), save_best_only=True)
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
-    batch_size = 32
+    batch_size = 16
     #32 -> 34147MiB / 40536MiB (error)
     #16 ->  34147MiB / 40536MiB (no error? check logs)
     #8  -> 17819MiB / 40536MiB
     print(f"Batch size = {batch_size}")
+
+    train_data = train_data.batch(batch_size)
+    val_data = val_data.batch(batch_size)
+    # Disable AutoShard.
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+    train_data = train_data.with_options(options)
+    val_data = val_data.with_options(options)
     
     model.fit(
-        x=x_data,
-        y=y_data,
+        x=train_data,
         epochs=50,
         batch_size=batch_size,
-        verbose=1,
-        validation_data=(x_data, y_data),
+        verbose=2,
+        validation_data=val_data,
         callbacks=[checkpoint_cb, early_stopping_cb],
     )
 
@@ -87,7 +93,7 @@ def train_model(model, x_data, y_data):
 
 
 
-def model_building(patients_df: pd.DataFrame, modality: str, x_data, y_data ):
+def model_building(shape, savepath, x_data, y_data ):
     """
     Given a dataframe of patients, a modality (e.g. "ct"), and the corresponding x and y data, 
     this function returns a trained model for the modality
@@ -100,18 +106,27 @@ def model_building(patients_df: pd.DataFrame, modality: str, x_data, y_data ):
     :param y_data: The target data
     :return: The model
     """
-    print(f"{modality} - Model building started".center(50, '_'))
+    print(f" Model building started".center(50, '_'))
     start_time = time.time()
 
-    shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
-    with tf.distribute.MirroredStrategy().scope():
-        model = get_model(shape, f"{modality}")
     
-    
-    model = train_model(model,x_data[idx], y_data[idx])
-    
-    model.save(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}")
 
-    print("\n"+f"{modality} - Model building finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
+    # shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
+    if len(tf.config.list_physical_devices('GPU'))>1:
+        with tf.distribute.MirroredStrategy().scope():
+            model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+    else: model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+    
+    #model = train_model(model,x_data[idx], y_data[idx])
+    if os.path.exists(savepath): 
+        model.load_weights(savepath)
+    else: 
+        model = train_model(model, savepath, x_data, y_data)
+        model.save(savepath)
+    # model.save(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}")
+
+    print("\n"+f" Model building finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
     return model
+
+# def model_evaulation(model, )
