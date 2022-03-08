@@ -1,6 +1,7 @@
 
 ### Img display ###
 import matplotlib.pyplot as plt
+import numpy as np
 
 def img_pltsave(data, savepath=""):
     """
@@ -8,6 +9,10 @@ def img_pltsave(data, savepath=""):
     
     :param data: the data to be displayed
     """
+
+    for i in range(len(data)):
+        if len(data[i].shape)>4:
+            data[i] = np.squeeze(data[i], axis=0)
 
     if not isinstance(data, list):
        data = [data]
@@ -27,8 +32,8 @@ def img_pltsave(data, savepath=""):
 
 
     aspect_ratio = data[0].shape[0] / data[0].shape[1]
-    nrow = rows_data*5
-    ncol = columns_data*5*aspect_ratio
+    nrow = rows_data*5*aspect_ratio
+    ncol = columns_data*5
     f, axarr = plt.subplots(
         rows_data,
         columns_data,
@@ -45,16 +50,16 @@ def img_pltsave(data, savepath=""):
         for i in range(rows_data):
             for j in range(columns_data):
                 if len(data[i].shape) >3 and len(data)>1:
-                    axarr[i, j].imshow(data[i][:, :, j].transpose((1,0,2)), cmap="gray")
+                    axarr[i, j].imshow(data[i][:, :, j], cmap="gray")
                     axarr[i, j].axis("off")
                 elif len(data[i].shape) >3:
-                    axarr[j].imshow(data[i][:, :, j].transpose((1,0,2)), cmap="gray")    
+                    axarr[j].imshow(data[i][:, :, j], cmap="gray")    
                     axarr[j].axis("off")
                 else:
-                    axarr[j].imshow(data[j][:, :, i].transpose((1,0,2)), cmap="gray")    
+                    axarr[j].imshow(data[j][:, :, i], cmap="gray")    
                     axarr[j].axis("off")
     else:
-        axarr.imshow(data[0].transpose((1,0,2)), cmap="gray")    
+        axarr.imshow(data[0], cmap="gray")    
         axarr.axis("off")
 
     if savepath:

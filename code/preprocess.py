@@ -31,6 +31,7 @@ def parse_csv(data_path,type_lst):
     # Removing subject which gives warning "Non uniform sampling or missing slices detected"
     df.drop(df.index[df["Subject ID"] == "ProstateX-0038"], inplace=True) 
 
+
     # Selecting rows which contains the wanted modalities as well as selecting relevant columns
     df = df[df["Series Description"].str.contains("|".join(type_lst), case=False)][["Series UID","Subject ID","Series Description","Study Date","File Location"]]
     
@@ -113,23 +114,19 @@ def getsize(patients_arr,patients_df, force_dim={}):
     # Gather the size of each image
     dim_arr = []
     for _, pat in patients_df.iterrows():
-            dim_arr.append(patients_arr[pat.idx].GetSize())
+            dim = patients_arr[pat.idx].GetSize()
+            dim_arr.append((dim[1],dim[0],dim[2]))
+                #patients_arr[pat.idx].GetSize().transpose((1,0,2)))
     patients_df["dim"] = dim_arr
         
     # Selecting the resize dimension based on the most common dimension
     resize_dim = patients_df.groupby(["tag","dim"],as_index=False).idx
-    # print(type(resize_dim))
-    # print(resize_dim.count())
-    # print("ASDASD"*10)
     resize_dim = resize_dim.count().groupby("tag").first().reset_index().rename(columns={"dim":"resize_dim"}).drop(columns=["idx"])
-
-    # print(type(resize_dim))
-    # print(resize_dim)
     
     # if the user wants to select their own dimension for all or just a specific modality
-    force_dim = {modality: dim for modality, dim in force_dim.items() if dim}
+    force_dim = {modality.lower(): dim for modality, dim in force_dim.items() if dim}
     if force_dim:
-        resize_dim.loc[resize_dim.tag.isin(force_dim.keys()), 'resize_dim'] = resize_dim.tag.map(force_dim)
+        resize_dim.loc[resize_dim.tag.str.lower().isin(force_dim.keys()), 'resize_dim'] = resize_dim.tag.str.lower().map(force_dim)
     patients_df = patients_df.merge(resize_dim, on="tag", how="left", suffixes=('', '_duplicate')).filter(regex='^(?!.*_duplicate)')
 
     print(f"\nCurrent resolution in the series pr modality:\n{patients_df.groupby(['tag']).dim.value_counts().to_frame('count')}")   
@@ -164,7 +161,7 @@ def resample_pat(patients_arr,patients_df, force_dim={}, interpolator=sitk.sitkL
     for _, pat in patients_df.iterrows():
         pat_slices = patients_arr[pat.idx]
         old_size = pat_slices.GetSize()
-        new_size = pat.resize_dim
+        new_size = (pat.resize_dim[1],pat.resize_dim[0],pat.resize_dim[2])#.transpose((1,0,2))
         if  old_size == new_size: continue # Skip resize of images with correct dimensions
         old_spacing = pat_slices.GetSpacing()
         new_spacing = [old_spacing[i] / new_dim * old_size[i] for i,new_dim in enumerate(new_size)]

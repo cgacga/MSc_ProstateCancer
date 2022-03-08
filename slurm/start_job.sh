@@ -1,26 +1,38 @@
 #!/bin/bash
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --partition=gpuA100 
-#SBATCH --time=15:15:00
-#SBATCH --job-name=job_bs16_tf_args
-#SBATCH --output=../logs/%j_%x.out
+#SBATCH --time=01:15:00
+#SBATCH --job-name=job_bs8_50_u
+#SBATCH --output=../logs/jobs/%j_%x.out
 # test #SBATCH --output=../logs/job_%x/%j_%x.out
  
 # Activate environment
 uenv verbose cuda-11.4 cudnn-11.4-8.2.4
 uenv miniconda-python39
-conda activate pca_env_tf
+conda activate pca_env
+#pca_env_piptf
+#pca_env_tf
+# pca_env_piptf
 # Run the Python script that uses the GPU
-# kwargs = {device:"foo",
-#           format:1,
-#           test:123,
-#           string:"str"}
 
-# declare -A kwargs
-# kwargs[dog]="Bark"
-# kwargs[wolf]="Howl"
+# to_param_list () {
+#     declare -n outlist=$1
+#     declare -n inhash=$2
 
-python3 -u ../code/main.py 
+#     for param in "${!inhash[@]}"; do
+#         #outlist+=( "--$param=${inhash[$param]}" )
+#         outlist+=( "$param=${inhash[$param]}" )
+#     done
+# }
+
+# declare -A options
+# options[dog]="Bark"
+# options[wolf]=123
+
+# to_param_list kwargs options
+
+python3 -u ../code/main.py
+#"${kwargs[@]}"
 #kwargs
 #device=foo format=1
 

@@ -60,11 +60,13 @@ def image_to_np_reshape(train_test_val_split,patients_df):
 
         reshaped_arr = np.empty(patients_arr.shape[1],dtype=object)
         for i in range(len(reshaped_arr)):
-            reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
+            # reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
+            dim = patients_arr[0,i].GetSize()
+            reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],dim[1],dim[0],dim[2])),dtype=np.float32)
 
         for j,pat in enumerate(patients_arr):
             for i,pat_slices in enumerate(pat):
-                reshaped_arr[i][j] = sitk.GetArrayFromImage(pat_slices).transpose((2,1,0))
+                reshaped_arr[i][j] = sitk.GetArrayFromImage(pat_slices).transpose((1,2,0))
 
         output.append(reshaped_arr)
     
@@ -113,7 +115,7 @@ def expand_dims(array_lst):
         lst = False
     for i,array in enumerate(array_lst):
         for j,img_set in enumerate(array):
-            array_lst[i][j] = tf.expand_dims(img_set,axis=4)
+            array_lst[i][j] = tf.expand_dims(img_set,-1)
     if lst: return array_lst
     else: return array_lst[0]
 
@@ -134,15 +136,15 @@ def data_augmentation(pat_slices, pat_df):
     x_train, x_test, x_val  = train_test_validation(pat_slices, pat_df, 0.7,0.2,0.1)
 
     # Reduce footprint by overwriting the array
-    pat_slices[:] = None #del pat_slices outside of function
+    pat_slices[:] = 0 #del pat_slices outside of function
 
     x_train, x_test, x_val  = image_to_np_reshape([x_train, x_test, x_val],pat_df)
     
     x_train_noisy = noise(x_train)
     x_test_noisy = noise(x_test)
-    x_val_noisy = noise(x_test)
+    x_val_noisy = noise(x_val)
 
-    # display([x_train[1][0],x_train_noisy[1][0]])
+    
     x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy])
 
     print("\n"+f"Data augmentation {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")

@@ -1,10 +1,14 @@
 
 ### Model building ###
 import os
+from xml.dom import VALIDATION_ERR
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
+# os.environ["KERAS_BACKEND"] = "tensorflow"
+import segmentation_models_3D as sm
+sm.set_framework('tf.keras')
 import pandas as pd
 import time
 
@@ -47,7 +51,8 @@ def get_model(dim, name="autoencoder"):
     return autoencoder
 
 
-def train_model(model, path, train_data, val_data):
+# def train_model(model, path, train_data, val_data):
+def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
     """
     Function to train the model.
     
@@ -60,30 +65,39 @@ def train_model(model, path, train_data, val_data):
 
     # Define callbacks.
     # checkpoint_cb = keras.callbacks.ModelCheckpoint(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{model.name}-checkpoint.h5", save_best_only=True)
-    checkpoint_cb = keras.callbacks.ModelCheckpoint(os.path.join(path,f"{model.name}-checkpoint.h5"), save_best_only=True)
+
+    # tf.keras.utils.plot_model(model,show_shapes=True,to_file=os.path.join(path,"model.png"))
+    #intall pydot and graphviz
+    
+    checkpoint_cb = keras.callbacks.ModelCheckpoint(os.path.join(path,f"checkpoint_cb/{model.name}-checkpoint.h5"), save_best_only=True)
+
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
-    batch_size = 16
+    batch_size = 2
     #32 -> 34147MiB / 40536MiB (error)
     #16 ->  34147MiB / 40536MiB (no error? check logs)
     #8  -> 17819MiB / 40536MiB
     print(f"Batch size = {batch_size}")
 
-    train_data = train_data.batch(batch_size)
-    val_data = val_data.batch(batch_size)
-    # Disable AutoShard.
-    options = tf.data.Options()
-    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
-    train_data = train_data.with_options(options)
-    val_data = val_data.with_options(options)
+    # train_data = train_data.batch(batch_size)
+    # val_data = val_data.batch(batch_size)
+    # # Disable AutoShard.
+    # options = tf.data.Options()
+    # options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+    # train_data = train_data.with_options(options)
+    # val_data = val_data.with_options(options)
     
     model.fit(
-        x=train_data,
+        # x=train_data,
+        x=x_train_noisy,
+        y=x_train,
         epochs=50,
         batch_size=batch_size,
         verbose=2,
-        validation_data=val_data,
-        callbacks=[checkpoint_cb, early_stopping_cb],
+        # validation_data=val_data,
+        validation_data=(x_test_noisy,x_test),
+        # callbacks=[checkpoint_cb, early_stopping_cb],
+        callbacks=early_stopping_cb,
     )
 
     # print("\n"+f"{model.name} - Train accuracy:\t {round (model.history['acc'][0], 4)}".center(50, '.'))
@@ -91,9 +105,35 @@ def train_model(model, path, train_data, val_data):
 
     return model
 
+def get_unet_model(dim, name="autoencoder"):
+
+    # shape = (width, height, depth, 1)
+    print("\n"+f"{name} - compile unet model".center(50, '.'))
+    #keras.backend.clear_session()
+
+    print(dim)
+    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2],1), encoder_weights=None)#"imagenet")
+    # autoencoder = sm.Unet("resnet18", input_shape=(None,None,None,1), encoder_weights=None)
+    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
+    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2]), encoder_weights=None,include_top=False)
+    # autoencoder = sm.Unet("resnet18", encoder_weights="imagenet")
+    autoencoder = sm.Unet("resnet18", input_shape=(None,None,None,1), encoder_weights=None)
 
 
-def model_building(shape, savepath, x_data, y_data ):
+    opt = tf.keras.optimizers.Adam()
+    learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
+    opt.lr.assign(learning_rate)
+    # print(f"Learning rate = {opt.lr.numpy()}")
+    autoencoder.compile(opt, loss="binary_crossentropy")
+
+    print(autoencoder.summary())
+
+    print("\n done with compiling")
+
+    return autoencoder
+
+
+def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
     """
     Given a dataframe of patients, a modality (e.g. "ct"), and the corresponding x and y data, 
     this function returns a trained model for the modality
@@ -110,23 +150,41 @@ def model_building(shape, savepath, x_data, y_data ):
     start_time = time.time()
 
     
-
+    
     # shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
-    if len(tf.config.list_physical_devices('GPU'))>1:
-        with tf.distribute.MirroredStrategy().scope():
-            model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
-    else: model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+    gpus = tf.config.list_physical_devices('GPU')
+    strategy = tf.distribute.MirroredStrategy()
+    if len(gpus)>1:
+
+        print("print two gpus")
+        
+        with strategy.scope():
+            # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+            model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+
+    else: 
+        # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+        # shape=x_data.shape
+        model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+        
+    
     
     #model = train_model(model,x_data[idx], y_data[idx])
-    if os.path.exists(savepath): 
-        model.load_weights(savepath)
+    if os.path.isdir(savepath): 
+        if len(gpus)>1:
+            with strategy.scope():
+                # model.load_weights(os.path.join(savepath,"weights"))    
+                model.load_weights(savepath)
+                print("Loaded Weights")
+        else: model.load_weights(os.path.join(savepath,"weights"))        
     else: 
-        model = train_model(model, savepath, x_data, y_data)
-        model.save(savepath)
+        model = train_model(model, savepath, x_data, y_data, x_val, y_val)
+        # model.save(savepath)
+        model.save_weights(os.path.join(savepath,"weights"))
+        
     # model.save(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}")
 
     print("\n"+f" Model building finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
     return model
 
-# def model_evaulation(model, )
