@@ -1,13 +1,19 @@
-name: pca_env_tf
+name: pca_env
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python
-  - tensorflow
-  - scikit-learn
-  - simpleitk
-  - matplotlib
-  - numpy
-  - pandas
+  - python=3.10.2
+  - scikit-learn=1.0.2
+  - scikit-image=0.19.2
+  - simpleitk=2.1.0
+  - matplotlib=3.5.1
+  - numpy=1.22.2
+  - pandas=1.4.1
   - pip
+  - pip:
+    - tensorflow==2.8.0
+    - Keras-Applications==1.0.8
+    - efficientnet-3D==1.0.2
+    - classification-models-3D==1.0.3
+    - segmentation-models-3D==1.0.3
