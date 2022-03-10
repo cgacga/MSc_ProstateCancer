@@ -115,7 +115,8 @@ def getsize(patients_arr,patients_df, force_dim={}):
     dim_arr = []
     for _, pat in patients_df.iterrows():
             dim = patients_arr[pat.idx].GetSize()
-            dim_arr.append((dim[1],dim[0],dim[2]))
+            # dim_arr.append((dim[1],dim[0],dim[2]))
+            dim_arr.append((dim[2],dim[1],dim[0]))
                 #patients_arr[pat.idx].GetSize().transpose((1,0,2)))
     patients_df["dim"] = dim_arr
         
@@ -161,7 +162,7 @@ def resample_pat(patients_arr,patients_df, force_dim={}, interpolator=sitk.sitkL
     for _, pat in patients_df.iterrows():
         pat_slices = patients_arr[pat.idx]
         old_size = pat_slices.GetSize()
-        new_size = (pat.resize_dim[1],pat.resize_dim[0],pat.resize_dim[2])#.transpose((1,0,2))
+        new_size = (pat.resize_dim[2],pat.resize_dim[1],pat.resize_dim[0])#.transpose((1,0,2))
         if  old_size == new_size: continue # Skip resize of images with correct dimensions
         old_spacing = pat_slices.GetSpacing()
         new_spacing = [old_spacing[i] / new_dim * old_size[i] for i,new_dim in enumerate(new_size)]
@@ -245,9 +246,9 @@ def preprocess(data_path, tags, nslices = False):
 
     If size is set to None, then the most common size will be used
         Examples:
-            tags = {"ADC":(86,128,20),"t2tsetra": (320,320,20)} 
+            tags = {"ADC":(20,86,128),"t2tsetra": (20,320,320)} 
 
-            tags = {"T2TSETRA": (320,320,20), "adc": None} 
+            tags = {"T2TSETRA": (32,320,320), "adc": None} 
 
             tags = {"ADC": None}     
     

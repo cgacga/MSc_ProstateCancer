@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --gres=gpu:1
 #SBATCH --partition=gpuA100 
-#SBATCH --time=01:15:00
-#SBATCH --job-name=job_bs8_50_u
+#SBATCH --time=15:15:00
+#SBATCH --job-name=job_bs2_500_u3_vgg
 #SBATCH --output=../logs/jobs/%j_%x.out
 # test #SBATCH --output=../logs/job_%x/%j_%x.out
  

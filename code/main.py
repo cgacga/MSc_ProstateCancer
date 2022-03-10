@@ -72,8 +72,8 @@ seed_all(42)
 def main(**kwargs):
     start_time = time.time()
     data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
-    #tags = {"ADC": None,"t2tsetra": (320,320,20)} 
-    tags = {"t2tsetra": (320,320,20)} 
+    #tags = {"ADC": None,"t2tsetra": (32,320,320)} 
+    tags = {"t2tsetra": (32,320,320)} 
 
     pat_slices, pat_df = preprocess(data_path,tags,False)
     x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = data_augmentation(pat_slices, pat_df)
@@ -167,7 +167,7 @@ def main(**kwargs):
 
     # predictions = t2_model.predict(x_val_noisy[1])
     # display([x_val_noisy[1], predictions])
-    print("\n"+f"Completed {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '*')+"\n")
+    print("\n"+f"Job completed {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '*')+"\n")
     # keras.backend.clear_session()
     return #pat_df, x_train, x_test, x_val, x_train_noisy, x_test_noisy
 

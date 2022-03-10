@@ -74,8 +74,8 @@ def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
     batch_size = 2
-    #32 -> 34147MiB / 40536MiB (error)
-    #16 ->  34147MiB / 40536MiB (no error? check logs)
+    #32 -> 34147MiB / 40536MiB (2 gpu -> 16 each)
+    #16 ->  34147MiB / 40536MiB 
     #8  -> 17819MiB / 40536MiB
     print(f"Batch size = {batch_size}")
 
@@ -87,11 +87,17 @@ def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
     # train_data = train_data.with_options(options)
     # val_data = val_data.with_options(options)
     
+    print(f"x_train_noisy shape = {x_train_noisy.shape}")
+
+    # from tensorflow.python.ops.numpy_ops import np_config
+    # np_config.enable_numpy_behavior()
+
+
     model.fit(
         # x=train_data,
         x=x_train_noisy,
         y=x_train,
-        epochs=50,
+        epochs=500,
         batch_size=batch_size,
         verbose=2,
         # validation_data=val_data,
@@ -111,14 +117,19 @@ def get_unet_model(dim, name="autoencoder"):
     print("\n"+f"{name} - compile unet model".center(50, '.'))
     #keras.backend.clear_session()
 
-    print(dim)
-    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2],1), encoder_weights=None)#"imagenet")
+    print(f"dim shape {dim}")
+    # print(f"dim input shape {dim[2]}, {dim[0]}, {dim[1]}, 1")
+    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
+    autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")#"imagenet")
     # autoencoder = sm.Unet("resnet18", input_shape=(None,None,None,1), encoder_weights=None)
     # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
     # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2]), encoder_weights=None,include_top=False)
     # autoencoder = sm.Unet("resnet18", encoder_weights="imagenet")
-    autoencoder = sm.Unet("resnet18", input_shape=(None,None,None,1), encoder_weights=None)
+    # autoencoder = sm.Unet("resnet18", input_shape=(320,320,None,1), encoder_weights=None)
 
+    # from classification_models_3D.tfkeras import Classifiers
+    # ResNet18, preprocess_input = Classifiers.get('resnet18')
+    # autoencoder = ResNet18(input_shape=(dim[2], dim[0], dim[1],1), weights=None)
 
     opt = tf.keras.optimizers.Adam()
     learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
@@ -156,7 +167,7 @@ def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
     strategy = tf.distribute.MirroredStrategy()
     if len(gpus)>1:
 
-        print("print two gpus")
+        print("\nprint two gpus\n")
         
         with strategy.scope():
             # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")

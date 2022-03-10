@@ -10,28 +10,38 @@ def img_pltsave(data, savepath=""):
     :param data: the data to be displayed
     """
 
-    for i in range(len(data)):
-        if len(data[i].shape)>4:
-            data[i] = np.squeeze(data[i], axis=0)
+    # for i in range(len(data)):
+    #     if len(data[i].shape)>4:
+    #         data[i] = data[i][0]#np.squeeze(data[i], axis=0)
 
     if not isinstance(data, list):
        data = [data]
         
     rows_data = len(data)
-    if len(data[0].shape) >3:
-        if (data[0].shape[-2])>6:
-            for i in range(len(data)):
-                data[i] = data[i][:,:,::int((data[i].shape[-2])/4)]
-        columns_data = data[0].shape[-2]#max([data[i].shape[-2] for i in range(rows_data)])
-    else: 
-        columns_data = rows_data
-        rows_data = data[0].shape[-1]#max([data[i].shape[-1] for i in range(rows_data)])
+    # if len(data[0].shape) >3:
+    #     if (data[0].shape[0])>6:
+    #         for i in range(len(data)):
+    #             data[i] = data[i][::int((data[i].shape[0])/4)]
+    #     columns_data = data[0].shape[1]#max([data[i].shape[-2] for i in range(rows_data)])
+    # else: 
+    #     columns_data = rows_data
 
-    from tensorflow.python.ops.numpy_ops import np_config
-    np_config.enable_numpy_behavior()
+    #     if (data[0].shape[0])>6:
+    #         for i in range(len(data)):
+    #             data[i] = data[i][::int((data[i].shape[0])/4)]
+    #     rows_data = data[0].shape[1]#max([data[i].shape[-1] for i in range(rows_data)])
 
+    for i in range(len(data)):
+        if len(data[i].shape)>4:
+            data[i] = data[i][0]
+        if (data[i].shape[0])>6:
+            data[i] = data[i][::int((data[i].shape[0])/4)]
+    columns_data = data[0].shape[0]
 
-    aspect_ratio = data[0].shape[0] / data[0].shape[1]
+    # from tensorflow.python.ops.numpy_ops import np_config
+    # np_config.enable_numpy_behavior()
+
+    aspect_ratio = data[0].shape[1] / data[0].shape[2]
     nrow = rows_data*5*aspect_ratio
     ncol = columns_data*5
     f, axarr = plt.subplots(
@@ -50,13 +60,13 @@ def img_pltsave(data, savepath=""):
         for i in range(rows_data):
             for j in range(columns_data):
                 if len(data[i].shape) >3 and len(data)>1:
-                    axarr[i, j].imshow(data[i][:, :, j], cmap="gray")
+                    axarr[i, j].imshow(data[i][j, :, :], cmap="gray")
                     axarr[i, j].axis("off")
                 elif len(data[i].shape) >3:
-                    axarr[j].imshow(data[i][:, :, j], cmap="gray")    
+                    axarr[j].imshow(data[i][j, :, :], cmap="gray")    
                     axarr[j].axis("off")
                 else:
-                    axarr[j].imshow(data[j][:, :, i], cmap="gray")    
+                    axarr[j].imshow(data[j][i, :, :], cmap="gray")    
                     axarr[j].axis("off")
     else:
         axarr.imshow(data[0], cmap="gray")    

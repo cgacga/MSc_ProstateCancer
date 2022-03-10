@@ -62,11 +62,11 @@ def image_to_np_reshape(train_test_val_split,patients_df):
         for i in range(len(reshaped_arr)):
             # reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
             dim = patients_arr[0,i].GetSize()
-            reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],dim[1],dim[0],dim[2])),dtype=np.float32)
+            reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0])),dtype=np.float32)
 
         for j,pat in enumerate(patients_arr):
             for i,pat_slices in enumerate(pat):
-                reshaped_arr[i][j] = sitk.GetArrayFromImage(pat_slices).transpose((1,2,0))
+                reshaped_arr[i][j] = sitk.GetArrayFromImage(pat_slices)#.transpose((1,2,0))
 
         output.append(reshaped_arr)
     
@@ -98,7 +98,7 @@ def noise(array):
     return array_deep
 
 
-def expand_dims(array_lst):
+def expand_dims(array_lst,dim=3):
     """
     Given a list of lists of images, expand the dimensions of the images by 1.
         This is done to make the images compatible with the convolutional layers.
@@ -115,7 +115,8 @@ def expand_dims(array_lst):
         lst = False
     for i,array in enumerate(array_lst):
         for j,img_set in enumerate(array):
-            array_lst[i][j] = tf.expand_dims(img_set,-1)
+            # array_lst[i][j] = tf.expand_dims(img_set,-1)
+            array_lst[i][j] = tf.repeat(tf.expand_dims(img_set,-1), dim, -1)
     if lst: return array_lst
     else: return array_lst[0]
 
@@ -145,7 +146,10 @@ def data_augmentation(pat_slices, pat_df):
     x_val_noisy = noise(x_val)
 
     
-    x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy])
+    # x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy])
+    x_train, x_test, x_val = expand_dims([x_train, x_test, x_val],dim=1)
+
+    x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([ x_train_noisy, x_test_noisy, x_val_noisy])
 
     print("\n"+f"Data augmentation {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
