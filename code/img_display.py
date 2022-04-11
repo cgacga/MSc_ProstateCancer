@@ -1,7 +1,9 @@
 
 ### Img display ###
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
+import tensorflow as tf
 
 def img_pltsave(data, savepath=""):
     """
@@ -31,19 +33,24 @@ def img_pltsave(data, savepath=""):
     #             data[i] = data[i][::int((data[i].shape[0])/4)]
     #     rows_data = data[0].shape[1]#max([data[i].shape[-1] for i in range(rows_data)])
 
+    
     for i in range(len(data)):
         if len(data[i].shape)>4:
             data[i] = data[i][0]
         if (data[i].shape[0])>6:
-            data[i] = data[i][::int((data[i].shape[0])/4)]
-    columns_data = data[0].shape[0]
-
-    # from tensorflow.python.ops.numpy_ops import np_config
-    # np_config.enable_numpy_behavior()
+            data[i] = data[i][::int((data[i].shape[0])/5)]
+            #data[i] = data[i][:,:,::int((data[i].shape[-2])/5)]
+    #columns_data = data[0].shape[0]
+    if len(data[0].shape)<4:
+        columns_data = 1
+    else: columns_data = data[0].shape[0]#columns_data = data[0].shape[-2]
+    
 
     aspect_ratio = data[0].shape[1] / data[0].shape[2]
-    nrow = rows_data*5*aspect_ratio
-    ncol = columns_data*5
+    #aspect_ratio = data[0].shape[0] / data[0].shape[1]
+    size_multiplier = 5
+    nrow = rows_data*aspect_ratio*size_multiplier
+    ncol = columns_data*size_multiplier
     f, axarr = plt.subplots(
         rows_data,
         columns_data,
@@ -60,13 +67,16 @@ def img_pltsave(data, savepath=""):
         for i in range(rows_data):
             for j in range(columns_data):
                 if len(data[i].shape) >3 and len(data)>1:
-                    axarr[i, j].imshow(data[i][j, :, :], cmap="gray")
+                    #axarr[i, j].imshow(data[i][:, :, j], cmap="gray")
+                    axarr[i, j].imshow(data[i][j], cmap="gray")
                     axarr[i, j].axis("off")
                 elif len(data[i].shape) >3:
-                    axarr[j].imshow(data[i][j, :, :], cmap="gray")    
+                    #axarr[j].imshow(data[i][:, :, j], cmap="gray")    
+                    axarr[j].imshow(data[i][j], cmap="gray")
                     axarr[j].axis("off")
                 else:
-                    axarr[j].imshow(data[j][i, :, :], cmap="gray")    
+                    #axarr[j].imshow(data[j][:, :, i], cmap="gray")
+                    axarr[j].imshow(data[j][i], cmap="gray")
                     axarr[j].axis("off")
     else:
         axarr.imshow(data[0], cmap="gray")    
@@ -78,20 +88,59 @@ def img_pltsave(data, savepath=""):
         plt.clf()
     else:
         plt.show()
+        plt.close()
     
-# Single image
-# img_pltsave([x_train_noisy[0][0,:,:,0]])
-# Two images
-# img_pltsave([x_train_noisy[0][0,:,:,0],x_train[0][0,:,:,0]])
-# One image series
-# img_pltsave([x_train_noisy[0][0]])
-# Two image series
-# img_pltsave([x_train_noisy[0][0],x_train[0][0]])
-# Three image series
-# img_pltsave([x_train_noisy[0][0],x_train[0][0],x_train[0][0]])
-
 
 # import importlib
 # import img_display
 # importlib.reload(img_display)
 # from img_display import *
+
+
+def patch_pltsave(patches, ksizes, savepath="", patch_depth = 32,channels=3):
+
+    patch_count = int(np.sqrt(patches.shape[0]))
+    patch_height, patch_width = ksizes
+    #plt_shape = tf.reshape(patches[0], (patch_height, patch_width,patch_depth , channels)).shape
+    plt_shape = tf.reshape(patches[0], (patch_depth ,patch_height, patch_width, channels)).shape
+    #plt_count = int(plt_shape[-2]/5)
+    plt_count = int(plt_shape[0]/5)
+
+    nrow = patch_count
+    ncol = patch_count*plt_count
+    size_multiplier = 5
+    #aspect_ratio = plt_shape[0] / plt_shape[1]
+    aspect_ratio = plt_shape[1] / plt_shape[2]
+    n_plot_rows = 1
+    row_shape = n_plot_rows*aspect_ratio*size_multiplier
+    col_shape = plt_count*size_multiplier
+
+
+    gs = gridspec.GridSpec(nrow, ncol,
+            wspace=0.0, hspace=0.0, 
+            top=1.-0.5/(row_shape+1), bottom=0.5/(row_shape+1), 
+            left=0.5/(col_shape+1), right=1-0.5/(col_shape+1)) 
+    fig = plt.figure(figsize=(col_shape+1, row_shape+1))  
+            
+    k = 0
+    for i in range(nrow):
+        for j in range(nrow):
+                #patch_img = tf.reshape(patches[k], (patch_height, patch_width, patch_depth,channels))
+                #patch_img = patch_img[:,:,::int((patch_img.shape[-2])/5)]
+                patch_img = tf.reshape(patches[k], (patch_depth,patch_height, patch_width, channels))
+                patch_img = patch_img[::int((patch_img.shape[0])/5)]
+                k = k+1
+
+                for nc in range(plt_count):
+                    ax= plt.subplot(gs[i,j+(patch_count*nc)])
+                    #ax.imshow(patch_img[:,:,nc], cmap='gray')
+                    ax.imshow(patch_img[nc], cmap='gray')
+                    ax.axis('off')
+
+    if savepath:
+        print(f"saving image to {savepath}")
+        plt.savefig(savepath)
+        plt.clf()
+    else:
+        plt.show()
+        plt.close()

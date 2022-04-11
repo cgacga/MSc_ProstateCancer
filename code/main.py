@@ -1,16 +1,14 @@
 #%%
 ### Importing libraries ###
-import os
-import time
-import sys
+import os, sys, time, random
 import numpy as np
 import tensorflow as tf
 # from tensorflow.keras import backend as K
 
 
 
-from data_augmentation import *
 from preprocess import *
+from data_augmentation import *
 from model_building import *
 from img_display import *
 
@@ -58,7 +56,7 @@ os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '2'
 
 # Seed for reproducibility
 # np.random.seed(42)
-import random
+
 # For reproducible results    
 def seed_all(s):
     random.seed(s)
@@ -75,22 +73,12 @@ def main(**kwargs):
     #tags = {"ADC": None,"t2tsetra": (32,320,320)} 
     tags = {"t2tsetra": (32,320,320)} 
 
-    pat_slices, pat_df = preprocess(data_path,tags,False)
-    x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = data_augmentation(pat_slices, pat_df)
+    y_train, y_test, y_val, pat_df = preprocess(data_path,tags,False)
+    # x_train, x_test, x_val, y_train, y_test, y_val = data_augmentation(pat_slices, pat_df)
+
     # x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
     # del pat_slices
 
-    
-    def sizeof_fmt(num, suffix='B'):
-        for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
-            if abs(num) < 1024.0:
-                return "%3.1f %s%s" % (num, unit, suffix)
-            num /= 1024.0
-        return "%.1f %s%s" % (num, 'Yi', suffix)
-
-    for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
-                            key= lambda x: -x[1])[:30]:
-        print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
 
 
     
@@ -105,17 +93,12 @@ def main(**kwargs):
         # train_data = tf.data.Dataset.from_tensor_slices((x_train_noisy[idx], x_train[idx]))
         # val_data = tf.data.Dataset.from_tensor_slices((x_test_noisy[idx], x_test[idx]))
         # models[modality] = model_building(shape, modelpath, train_data, val_data)
-        print(x_train_noisy[idx].shape)
-        print(x_train[idx].shape)
-        print(x_test_noisy[idx].shape)
-        print(x_test[idx].shape)
         #https://stackoverflow.com/questions/52724022/model-fits-on-a-single-gpu-but-script-crashes-when-trying-to-fit-on-multiple-gpu
-        print(x_val_noisy[idx].shape)
-        print(x_val[idx].shape)
-        model = model_building(shape, modelpath, x_train_noisy[idx],x_train[idx], x_test_noisy[idx], x_test[idx])
+
+        model = model_building(shape, modelpath, x_train[idx],y_train[idx], x_test[idx], y_test[idx])
  
 
-        pred_test = tf.expand_dims(x_test_noisy[idx][0],axis=0)
+        pred_test = tf.expand_dims(x_test[idx][0],axis=0)
         print("shape staert")
         print(pred_test.shape)
         print("prediction")
@@ -128,14 +111,14 @@ def main(**kwargs):
         else:
             predictions = model.predict(pred_test)
         print("saving img")
-        img_pltsave([x_test[idx][0], x_test_noisy[idx][0], predictions],os.path.join(modelpath,"test_set.png"))
+        img_pltsave([x_test[idx][0], x_test[idx][0], predictions],os.path.join(modelpath,"test_set.png"))
 
-        pred_val = tf.expand_dims(x_val_noisy[idx][0],axis=0)
+        pred_val = tf.expand_dims(x_val[idx][0],axis=0)
         if len(gpus)>1:
             with strategy.scope():
                 predictions = model.predict(pred_val)
         else: predictions = model.predict(pred_val)
-        img_pltsave([x_val[idx][0], x_val_noisy[idx][0], predictions],os.path.join(modelpath,"validation_set.png"))
+        img_pltsave([x_val[idx][0], x_val[idx][0], predictions],os.path.join(modelpath,"validation_set.png"))
 
         models[modality] = model
 

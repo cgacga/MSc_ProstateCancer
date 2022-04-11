@@ -1,10 +1,11 @@
 
 ### Preprocess ###
-import SimpleITK as sitk
-import os
-import pandas as pd
-import time
+import os, time
 import numpy as np
+import pandas as pd
+import tensorflow as tf
+import SimpleITK as sitk
+from sklearn.model_selection import train_test_split
 
 def parse_csv(data_path,type_lst):
     """
@@ -72,7 +73,7 @@ def load_slices(data_path,tags, nslices=False):
     patients_df = parse_csv(data_path,tags)
 
     if nslices:
-        patients_df = patients_df[:10].reset_index()
+        patients_df = patients_df[:20].reset_index()
     
     # Assigning empty array with shape = (number of patients,number of modalities), in our case (346,2)
     patients_arr = np.empty(shape=(np.ceil(len(patients_df)/len(patients_df["tag"].unique())).astype(int),len(patients_df["tag"].unique())),dtype=object)
@@ -111,21 +112,27 @@ def getsize(patients_arr,patients_df, force_dim={}):
     :return: Dataframe with updated image dimensions
     """
 
+
+    #TODO: change to minimum 32 in depth (z)
+    
+
     # Gather the size of each image
     dim_arr = []
     for _, pat in patients_df.iterrows():
             dim = patients_arr[pat.idx].GetSize()
-            # dim_arr.append((dim[1],dim[0],dim[2]))
+            #dim_arr.append((dim[1],dim[0],dim[2]))
             dim_arr.append((dim[2],dim[1],dim[0]))
+            
                 #patients_arr[pat.idx].GetSize().transpose((1,0,2)))
     patients_df["dim"] = dim_arr
         
     # Selecting the resize dimension based on the most common dimension
     resize_dim = patients_df.groupby(["tag","dim"],as_index=False).idx
     resize_dim = resize_dim.count().groupby("tag").first().reset_index().rename(columns={"dim":"resize_dim"}).drop(columns=["idx"])
-    
+
     # if the user wants to select their own dimension for all or just a specific modality
-    force_dim = {modality.lower(): dim for modality, dim in force_dim.items() if dim}
+    #force_dim = {modality.lower(): (dim if dim else (*resize_dim.resize_dim[resize_dim.tag.str.contains(modality, case=False)][0][:-1],32)) for modality, dim in force_dim.items() }
+    force_dim = {modality.lower(): (dim if dim else (32,*resize_dim.resize_dim[resize_dim.tag.str.contains(modality, case=False)][0][1:])) for modality, dim in force_dim.items() }
     if force_dim:
         resize_dim.loc[resize_dim.tag.str.lower().isin(force_dim.keys()), 'resize_dim'] = resize_dim.tag.str.lower().map(force_dim)
     patients_df = patients_df.merge(resize_dim, on="tag", how="left", suffixes=('', '_duplicate')).filter(regex='^(?!.*_duplicate)')
@@ -159,10 +166,16 @@ def resample_pat(patients_arr,patients_df, force_dim={}, interpolator=sitk.sitkL
     new_spacing = np.zeros(3)
     filter = sitk.ResampleImageFilter()
 
+    #TODO: save before and after image to show difference in the report. Due to resampling and antialiasing issues
+    #https://simpleitk.org/SPIE2018_COURSE/images_and_resampling.pdf
+    #https://stackoverflow.com/questions/48065117/simpleitk-resize-images
+
+
     for _, pat in patients_df.iterrows():
         pat_slices = patients_arr[pat.idx]
         old_size = pat_slices.GetSize()
-        new_size = (pat.resize_dim[2],pat.resize_dim[1],pat.resize_dim[0])#.transpose((1,0,2))
+        new_size = (pat.resize_dim[2],pat.resize_dim[1],pat.resize_dim[0])
+        #new_size = (pat.resize_dim[1],pat.resize_dim[0],pat.resize_dim[2])
         if  old_size == new_size: continue # Skip resize of images with correct dimensions
         old_spacing = pat_slices.GetSpacing()
         new_spacing = [old_spacing[i] / new_dim * old_size[i] for i,new_dim in enumerate(new_size)]
@@ -239,6 +252,141 @@ def normalize(patients_arr,patients_df):
     return patients_arr
 
 
+def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
+    """
+    Convert the sitk image to np.array and reshape it to (num_of_slices, height, width, channels)
+    
+    :param train_test_val_split: The output of the image_to_np_reshape function
+    :param patients_df: The dataframe containing the patient information
+    :return: a list of 3 np.arrays. Each array contains the images of the patients in the train, test and validation sets.
+    """
+
+    print(f"\n{'Converting sitk image to np.array and reshape'.center(50, '.')}")
+
+    start_time = time.time()
+    output = []
+
+    # Looping through the train, test, validation sets
+    for i,patients_arr in enumerate(train_test_val_split):
+
+        reshaped_arr = np.empty(patients_arr.shape[1],dtype=object)
+        for i in range(len(reshaped_arr)):
+            # reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
+            dim = patients_arr[0,i].GetSize()
+            reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0],channels)),dtype=np.float32)
+            #reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[1],dim[0],dim[2],channels)),dtype=np.float32)
+            
+        for j,pat in enumerate(patients_arr):
+            for k,pat_slices in enumerate(pat):
+                #TODO: tf.sparse.expand_dims?
+                
+                reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices).transpose(1,2,0)),-1), channels, -1)
+            
+        for i in range(len(reshaped_arr)):
+            reshaped_arr[i]=tf.convert_to_tensor(reshaped_arr[i],dtype=tf.float32)
+        output.append(reshaped_arr)
+    
+    # Updating the dataframe with new indexes
+    patients_df[["tag_idx","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([x[1],x[0]]))
+    patients_df.drop(columns="idx", inplace=True)
+
+    print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
+
+    #TODO: expand dims here... or not?
+
+    return output
+
+
+# def expand_dims(array_lst,dim=3):
+#     """
+#     Given a list of lists of images, expand the dimensions of the images by 1.
+#         This is done to make the images compatible with the convolutional layers.
+#         The function is used to expand the dimensions of the input.
+#         And converting one channel to three channel images.
+    
+#     :param array_lst: a list of lists of images
+#     :return: A list of lists of tensors. 
+#     """
+#     lst = True
+#     if not isinstance(array_lst, list):
+#         array_lst = [array_lst]
+#         lst = False
+#     elif len(array_lst)<2:
+#         lst = False
+#     for i,array in enumerate(array_lst):
+#         for j,img_set in enumerate(array):
+#             # array_lst[i][j] = tf.expand_dims(img_set,-1)
+#             array_lst[i][j] = tf.repeat(tf.expand_dims(img_set,-1), dim, -1)
+#     if lst: return array_lst
+#     else: return array_lst[0]
+
+
+
+def train_test_validation(patients_arr, patients_df, ratio):
+    """
+    The function takes in the image array and dataframe and the split ratio.
+    It then splits the array into training, test and validation sets and updates the dataframe.
+    
+    :param patients_arr: Image array
+    :param patients_df: Dataframe with image information
+    :param train_ratio: Ratio of training data
+    :param test_ratio: Ratio of training data
+    :param validation_ratio: Ratio of training data
+    :return: training, test and validation sets.
+    """
+
+    print(f"\n{'Splitting'.center(50, '.')}")
+    train_ratio,test_ratio,validation_ratio = ratio
+    # splitting the data into training, test and validation sets
+    x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=(1-test_ratio), random_state=42, shuffle=True)
+    x_train, x_val, train_df, val_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio))
+
+    # Update the dataframe with the new indexes
+    df_idx = np.concatenate([train_df, test_df, val_df])
+    split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df,val_df]])
+    split_names = np.concatenate([["train_df"]*len(train_df), ["test_df"]*len(test_df), ["val_df"]*len(val_df)])
+    patients_df[["split","idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
+    
+
+    print(f"\n|\tTrain\t|\tTest\t|\tVal\t|")
+    print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
+    print(f"|\t{len(x_train)}\t|\t{len(x_test)}\t|\t{len(x_val)}\t|")
+
+    return x_train, x_test, x_val
+
+def train_test(patients_arr, patients_df, ratio):
+    """
+    The function takes in the image array and dataframe and the split ratio.
+    It then splits the array into training, test and validation sets and updates the dataframe.
+    
+    :param patients_arr: Image array
+    :param patients_df: Dataframe with image information
+    :param train_ratio: Ratio of training data
+    :param test_ratio: Ratio of training data
+    :param validation_ratio: Ratio of training data
+    :return: training, test and validation sets.
+    """
+
+    print(f"\n{'Splitting'.center(50, '.')}")
+    train_ratio,test_ratio = ratio
+    # splitting the data into training, test and validation sets
+    x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=train_ratio, random_state=42, shuffle=True)
+
+    # Update the dataframe with the new indexes
+    df_idx = np.concatenate([train_df, test_df])
+    split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df]])
+    split_names = np.concatenate([["train_df"]*len(train_df), ["test_df"]*len(test_df)])
+    patients_df[["split","idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
+    
+
+    print(f"\n|\tTrain\t|\tTest\t|")
+    print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|")
+    print(f"|\t{len(x_train)}\t|\t{len(x_test)}\t|")
+
+    return x_train, x_test
+
+
 def preprocess(data_path, tags, nslices = False):
     """
     Loads the slices from the data path, resamples the slices to the desired resolution, normalizes the
@@ -265,8 +413,29 @@ def preprocess(data_path, tags, nslices = False):
     pat_slices, pat_df = resample_pat(pat_slices, pat_df, tags)
 
     pat_slices = normalize(pat_slices, pat_df)
+
+    # y_train, y_test, y_val  = train_test_validation(pat_slices, pat_df, ratio=[0.7,0.2,0.1])
+    y_train, y_test  = train_test(pat_slices, pat_df, ratio=[0.7,0.3])
+
+    y_train, y_test  = image_to_np_reshape([y_train, y_test],pat_df,channels=3)
+
+    # y_train, y_test, y_val  = image_to_np_reshape([y_train, y_test, y_val],pat_df,channels=3)
+
+    print(y_train.shape)
+    print(y_train[0].shape)
+    print(y_train[0][0].shape)
+    print(y_train[0][0][0].shape)
+
+    print(type(y_train))
+    print(type(y_train[0]))
+    print(type(y_train[0][0]))
+    print(type(y_train[0][0][0]))
+    print(type(y_train[0][0][0][0]))
+    print(type(y_train[0][0][0][0][0]))
+
+    #x_train, x_test, x_val = expand_dims([x_train, x_test, x_val],dim=1)
         
     print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
-    return pat_slices, pat_df
+    return y_train, y_test, pat_df
 

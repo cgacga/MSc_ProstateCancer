@@ -12,43 +12,44 @@ sm.set_framework('tf.keras')
 import pandas as pd
 import time
 
-def get_model(dim, name="autoencoder"):
-    """
-    It creates a model that accepts a 3D input of shape (width, height, depth, 1) and returns a 3D
-    output of the same shape.
+# def get_model(dim, name="autoencoder"):
+#     #TODO: remove this
+#     """
+#     It creates a model that accepts a 3D input of shape (width, height, depth, 1) and returns a 3D
+#     output of the same shape.
     
-    :param dim: The shape of the input data
-    :param name: The Model's name
-    :return: The autoencoder model
-    """
-    # shape = (width, height, depth, 1)
-    print("\n"+f"{name} - compile model".center(50, '.'))
-    #keras.backend.clear_session()
+#     :param dim: The shape of the input data
+#     :param name: The Model's name
+#     :return: The autoencoder model
+#     """
+#     # shape = (width, height, depth, 1)
+#     print("\n"+f"{name} - compile model".center(50, '.'))
+#     #keras.backend.clear_session()
     
-    inputs = keras.Input(shape=(dim[0], dim[1], dim[2], 1))
+#     inputs = keras.Input(shape=(dim[0], dim[1], dim[2], 1))
 
-    # Encoder
-    x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(inputs)
-    x = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
-    x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(x)
-    encoded = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
+#     # Encoder
+#     x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(inputs)
+#     x = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
+#     x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(x)
+#     encoded = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
 
-    # Decoder
-    x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(encoded)
-    x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(x)
-    decoded = layers.Conv3D(1, (3, 3, 3), activation="sigmoid", padding="same")(x)
+#     # Decoder
+#     x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(encoded)
+#     x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(x)
+#     decoded = layers.Conv3D(1, (3, 3, 3), activation="sigmoid", padding="same")(x)
 
-    # Autoencoder
-    autoencoder = Model(inputs, decoded, name=name)
-    opt = tf.keras.optimizers.Adam()
-    learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
-    opt.lr.assign(learning_rate)
-    # print(f"Learning rate = {opt.lr.numpy()}")
-    autoencoder.compile(opt, loss="binary_crossentropy")
+#     # Autoencoder
+#     autoencoder = Model(inputs, decoded, name=name)
+#     opt = tf.keras.optimizers.Adam()
+#     learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
+#     opt.lr.assign(learning_rate)
+#     # print(f"Learning rate = {opt.lr.numpy()}")
+#     autoencoder.compile(opt, loss="binary_crossentropy")
 
-    print(autoencoder.summary())
+#     print(autoencoder.summary())
 
-    return autoencoder
+#     return autoencoder
 
 
 # def train_model(model, path, train_data, val_data):
@@ -92,6 +93,10 @@ def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
     # from tensorflow.python.ops.numpy_ops import np_config
     # np_config.enable_numpy_behavior()
 
+    #TODO: save weights pr epoch 
+    #TODO: save metric with epochs
+    #TODO: online loading of data with or without online augmentation
+
 
     model.fit(
         # x=train_data,
@@ -117,24 +122,17 @@ def get_unet_model(dim, name="autoencoder"):
     print("\n"+f"{name} - compile unet model".center(50, '.'))
     #keras.backend.clear_session()
 
-    print(f"dim shape {dim}")
-    # print(f"dim input shape {dim[2]}, {dim[0]}, {dim[1]}, 1")
-    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
-    autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")#"imagenet")
-    # autoencoder = sm.Unet("resnet18", input_shape=(None,None,None,1), encoder_weights=None)
-    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
-    # autoencoder = sm.Unet("resnet18", input_shape=(dim[0], dim[1], dim[2]), encoder_weights=None,include_top=False)
-    # autoencoder = sm.Unet("resnet18", encoder_weights="imagenet")
-    # autoencoder = sm.Unet("resnet18", input_shape=(320,320,None,1), encoder_weights=None)
+    #TODO: sbatch variable for unet backbone
+    autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
 
-    # from classification_models_3D.tfkeras import Classifiers
-    # ResNet18, preprocess_input = Classifiers.get('resnet18')
-    # autoencoder = ResNet18(input_shape=(dim[2], dim[0], dim[1],1), weights=None)
-
+    #TODO: sbatch variable for learning_rate
     opt = tf.keras.optimizers.Adam()
     learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
     opt.lr.assign(learning_rate)
-    # print(f"Learning rate = {opt.lr.numpy()}")
+
+    #TODO: check loss function?
+    #TODO: add MSE and MAE for each epoch and save log
+    #TODO: add loss and val loss function for each epoch
     autoencoder.compile(opt, loss="binary_crossentropy")
 
     print(autoencoder.summary())
@@ -161,6 +159,7 @@ def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
     start_time = time.time()
 
     
+    #TODO: concatinate training and validation sets to one 30% set
     
     # shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
     gpus = tf.config.list_physical_devices('GPU')
@@ -178,7 +177,9 @@ def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
         # shape=x_data.shape
         model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
         
-    
+
+
+    #TODO: load selected weights from sbatch variable if exists
     
     #model = train_model(model,x_data[idx], y_data[idx])
     if os.path.isdir(savepath): 
@@ -192,6 +193,8 @@ def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
         model = train_model(model, savepath, x_data, y_data, x_val, y_val)
         # model.save(savepath)
         model.save_weights(os.path.join(savepath,"weights"))
+
+    #TODO: save images from recreation, with noisy and clean included (use more than 5 images in the plot)
         
     # model.save(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}")
 
