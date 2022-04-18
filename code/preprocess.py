@@ -132,7 +132,8 @@ def getsize(patients_arr,patients_df, force_dim={}):
 
     # if the user wants to select their own dimension for all or just a specific modality
     #force_dim = {modality.lower(): (dim if dim else (*resize_dim.resize_dim[resize_dim.tag.str.contains(modality, case=False)][0][:-1],32)) for modality, dim in force_dim.items() }
-    force_dim = {modality.lower(): (dim if dim else (32,*resize_dim.resize_dim[resize_dim.tag.str.contains(modality, case=False)][0][1:])) for modality, dim in force_dim.items() }
+    
+    force_dim = {modality.lower(): (dim if dim else (32,*resize_dim.resize_dim[resize_dim.tag.str.contains(modality, case=False)].item()[1:])) for modality, dim in force_dim.items() }
     if force_dim:
         resize_dim.loc[resize_dim.tag.str.lower().isin(force_dim.keys()), 'resize_dim'] = resize_dim.tag.str.lower().map(force_dim)
     patients_df = patients_df.merge(resize_dim, on="tag", how="left", suffixes=('', '_duplicate')).filter(regex='^(?!.*_duplicate)')
@@ -279,12 +280,72 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
         for j,pat in enumerate(patients_arr):
             for k,pat_slices in enumerate(pat):
                 #TODO: tf.sparse.expand_dims?
+                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+                # print(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)).dtype)
+                # print(tf.shape(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices))))
+                # print(type(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices))))
+                # print()
+
+                # print(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1).dtype)
+                # print(tf.shape(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1)))
+                # print(type(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1)))
+                # print()
+
+
+                # print(sitk.GetArrayFromImage(pat_slices).dtype)
+                # print(tf.shape(sitk.GetArrayFromImage(pat_slices)))
+                # print(type(sitk.GetArrayFromImage(pat_slices)))
+                # print()
                 
-                reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+                # qwe = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),dtype=tf.float32),-1), channels, -1)
+                # print(qwe.dtype)
+                # print(tf.shape(qwe))
+                # print(type(qwe))
+                # print()
+
+                # bebe = tf.sparse.from_dense(qwe)
+                # print(bebe.dtype)
+                # print(tf.shape(bebe))
+                # print(type(bebe))
+                # print()
+
+                
+                # qwe = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+                # print(qwe.dtype)
+                # print(tf.shape(qwe))
+                # print(type(qwe))
+                # print()
+
+                # bebe = tf.sparse.from_dense(qwe)
+                # print(bebe.dtype)
+                # print(tf.shape(bebe))
+                # print(type(bebe))
+                # print()
+
+                # print(tf.shape(tf.repeat(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1), channels, -1)))
+                # print(type(tf.repeat(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1), channels, -1)))
+                # print()
+
+                # asd = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+                # reshaped_arr[k][j] = tf.sparse.from_dense(asd)
+
+                # reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+
+                reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+
+                
+                # reshaped_arr[k][j] = np.repeat(np.expand_dims(sitk.GetArrayFromImage(pat_slices),-1), channels, -1)
+
+
+
+                # reshaped_arr = tf.assign(reshaped_arr[k][j],tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1))
+
+                # reshaped_arr[k][j] = tf.repeat(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1), channels, -1)
                 #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices).transpose(1,2,0)),-1), channels, -1)
-            
+        
         for i in range(len(reshaped_arr)):
             reshaped_arr[i]=tf.convert_to_tensor(reshaped_arr[i],dtype=tf.float32)
+            # reshaped_arr[i]=tf.sparse.from_dense(reshaped_arr[i])
         output.append(reshaped_arr)
     
     # Updating the dataframe with new indexes
@@ -293,7 +354,6 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
 
     print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
 
-    #TODO: expand dims here... or not?
 
     return output
 
@@ -421,17 +481,25 @@ def preprocess(data_path, tags, nslices = False):
 
     # y_train, y_test, y_val  = image_to_np_reshape([y_train, y_test, y_val],pat_df,channels=3)
 
-    print(y_train.shape)
-    print(y_train[0].shape)
-    print(y_train[0][0].shape)
-    print(y_train[0][0][0].shape)
+    # print(y_train.shape)
+    # print(y_train[0].shape)
+    # print(y_train[0][0].shape)
+    # print(y_train[0][0][0].shape)
 
-    print(type(y_train))
-    print(type(y_train[0]))
-    print(type(y_train[0][0]))
-    print(type(y_train[0][0][0]))
-    print(type(y_train[0][0][0][0]))
-    print(type(y_train[0][0][0][0][0]))
+    # print(type(y_train))
+    # print(type(y_train[0]))
+    # print(type(y_train[0][0]))
+    # print(type(y_train[0][0][0]))
+    # print(type(y_train[0][0][0][0]))
+    # print(type(y_train[0][0][0][0][0]))
+
+    # print((y_train).shape)
+    # print((y_train[0]).shape)
+    # print((y_train[0][0]).shape)
+    # print((y_train[0][0][0]).shape)
+    # print((y_train[0][0][0][0]).shape)
+    # print((y_train[0][0][0][0][0]).shape)
+
 
     #x_train, x_test, x_val = expand_dims([x_train, x_test, x_val],dim=1)
         

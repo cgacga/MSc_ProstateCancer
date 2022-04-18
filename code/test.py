@@ -21,14 +21,15 @@ seed_all(42)
 
 
 data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
+#tags = {"ADC": None,"t2tsetra": None} 
 #tags = {"ADC": None,"t2tsetra": (32,320,320)} 
-tags = {"t2tsetra": (32,320,320)} 
+#tags = {"t2tsetra": (32,320,320)} 
+tags = {"t2tsetra": None} 
 
 
-import importlib
 #%%
 
-
+import importlib
 importlib.reload(sys.modules['preprocess'])
 importlib.reload(sys.modules['model_building'])
 importlib.reload(sys.modules['img_display'])
@@ -36,288 +37,197 @@ from preprocess import *
 from model_building import *
 from img_display import *
 
-y_train, y_test, pat_df = preprocess(data_path,tags,True)
+
+
+import timeit
+n = 10
+result = timeit.timeit(stmt='preprocess(data_path,tags,True)', globals=globals(), number=n)
+print(f"Execution time is {result / n} seconds")
+
+# y_train, y_test, pat_df = preprocess(data_path,tags,True)
+
 # x_train, x_test, x_val, y_train, y_test, y_val = data_augmentation(pat_slices, pat_df)
 
+# for modality in tags.keys():
+#     shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality, case=False)].values[0]
+#     img_pltsave([y_train[idx][0], y_test[idx][0]])
 
+#%%
+
+y_train[0].dtype
+y_train[0].shape
+
+#img_pltsave([tf.sparse.to_dense(y_train[0][0])])
+
+type(y_train[0])
+#%%
+w = tf.sparse.to_dense(y_train[0])
+q = tf.sparse.to_dense(y_test[0])
 for modality in tags.keys():
     shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality, case=False)].values[0]
-    img_pltsave([y_train[idx][0], y_test[idx][0]])
-
+    img_pltsave([w[0],q[0]])
 
 #%%
 
 
 def keras_augment(images,ksizes,depth=32,channels=3):
 
-    patch_dims = tf.shape(images)[-1]
-    batch_size = tf.shape(images)[0]
-    ksize_rows, ksize_cols = ksizes
+    ksize_height, ksize_width = ksizes
 
-    images = tf.reshape(images, [-1, depth,ksize_rows,ksize_cols,channels])
-    # images = tf.transpose(images, perm=[0,2,3,1,4])
-    # images = tf.reshape(images, [-1, 32,32,32*3])
-    
-    kwargs={"data_format": "channels_first"}
-
-    # def random_flip_on_probability(image, probability= 0.5):
-    #     if random.random() < probability:
-    #         # return tf.image.random_flip_left_right(image)
-    #         #return layers.RandomRotation(factor=0.02,fill_mode="constant",fill_value=0)
-    #         return tf.keras.preprocessing.image.random_rotation(image,rg=55.02,fill_mode="constant",cval=0)
-    #     return image
-
+    images = tf.reshape(images, [-1, depth,ksize_height,ksize_width,channels])
+        
     data_augmentation = tf.keras.Sequential(
         [
             layers.Permute(dims=(2,3,1,4)),
-            layers.Reshape((ksize_rows,ksize_cols,depth*channels)),
+            layers.Reshape((ksize_height,ksize_width,depth*channels)),
 
             #layers.RandomFlip("horizontal_and_vertical"),
-            #layers.RandomFlip("horizontal"),
-            # layers.Lambda(random_flip_on_probability),
-            layers.RandomRotation(factor=0.02,fill_mode="constant",fill_value=0),
+            layers.RandomFlip("horizontal"),
+            layers.RandomRotation(factor=0.083334,fill_mode="constant",fill_value=0),
+            #2 * pi * (0.1 rad) = 36 deg
+            #2 * pi * (0.08333(repeating ofc) rad) /approx 30 deg
             
-            layers.Reshape(target_shape=(ksize_rows,ksize_cols,depth,channels)),
+            layers.Reshape(target_shape=(ksize_height,ksize_width,depth,channels)),
             layers.Permute(dims=(3,1,2,4)),
         ],
         name="data_augmentation",
     )
-
-    print(images.shape)
-
     images = data_augmentation(images)
-
-    print(images.shape)
     
-    # images = tf.reshape(images, [-1, 32, 32, 32,3])
-    # images = tf.transpose(images, perm=[0,3,1,2,4])
-    #images = tf.reshape(images, [batch_size,-1, patch_dims])
     return images
+
 
 
 class Patches(layers.Layer):
     def __init__(self, ksizes = [32,32], strides = [32,32]):
         super(Patches, self).__init__()
-        self.ksize_rows, self.ksize_cols = ksizes
-        self.strides_rows, self.strides_cols =strides
+        self.ksize_height, self.ksize_width = ksizes
+        self.strides_height, self.strides_width =strides
 
     def call(self, images):
+                
         planes = tf.shape(images)[1]
+        channels = tf.shape(images)[-1]
 
         patches = tf.extract_volume_patches(
             input=images,
-            ksizes=[1, planes, self.ksize_rows, self.ksize_cols, 1],
-            strides=[1, planes, self.strides_rows, self.strides_cols, 1],
-            padding="SAME",
+            ksizes=[1, planes, self.ksize_height, self.ksize_width, 1],
+            strides=[1, planes, self.strides_height, self.strides_width, 1],
+            padding="VALID",
         )
-        # patch_dims = patches.shape[-1]
-        #patches = tf.reshape(patches, [batch_size,-1, patch_dims])
+        
+        patches = tf.reshape(patches, [-1, planes,self.ksize_height,self.ksize_width,channels])
+                
         return patches
 
 
+def augment_patches(patients):
 
-class PatchEncoder(layers.Layer):
-    def __init__(self, num_patches, projection_dim):
-        super(PatchEncoder, self).__init__()
-        self.num_patches = num_patches
-        self.projection = layers.Dense(units=projection_dim)
-        self.position_embedding = layers.Embedding(
-            input_dim=num_patches, output_dim=projection_dim
-        )
+    
+    img_heigth = patients.shape[-3]
+    img_width = patients.shape[-2]
+    reconstructed_arr = np.zeros_like(patients)
 
-    def call(self, patch):
-        positions = tf.range(start=0, limit=self.num_patches, delta=1)
-        encoded = self.projection(patch) + self.position_embedding(positions)
-        return encoded
+    no_adjacent = True
+    trials = 100
 
+    for pat,patient in enumerate(patients):
+
+        #må være noe med min og max størrelse på patch i forhold til max patch
+        
+        min_reduction = 5
+        max_reduction = 15
+
+        min_percentage = 10
+        max_percentage = 15
+        
+        mask_percentage = 50
+
+        
+        rnd_reduction = np.random.randint(min_reduction,max_reduction,size=2)
+        patch_height = int(img_heigth/rnd_reduction[0])
+        patch_width = int(img_width/rnd_reduction[1])
+
+        ksizes = [patch_height,patch_width]
+        strides = [patch_height,patch_width]
+        
+        patches = Patches(ksizes,strides)(tf.expand_dims(patient, axis=0))
+        num_patches = patches.shape[0]       
+        rnd_percentage = np.random.randint(min_percentage,max_percentage,size=1)
+        n_augmentations = num_patches*rnd_percentage//100
+        idx_augmentations = np.random.choice(num_patches, size=n_augmentations, replace=False)
+        num_patches_x,num_patches_y = [(patient.shape[i+1] // k)-1  for i,k in enumerate(ksizes)]
+        left_border = [(num_patches_y+1) * i for i in range(num_patches_x+1)]
+        right_border = [((num_patches_y+1) * i) - 1 for i in range(1,num_patches_x+2)]
+        
+        if no_adjacent:
+            for mmm in range(trials):
+                idx_augmentations = np.random.choice(num_patches, size=n_augmentations, replace=False)
+                n_mask = len(idx_augmentations)*mask_percentage//100
+                idx_mask = idx_augmentations[:n_mask]
+                idx_rotate = idx_augmentations[n_mask:]
+                
+                valid = True
+                for i in [idx_mask,idx_rotate]:
+                    elements = np.array([])
+                    for j in i:
+                        if j not in left_border:
+                            elements = np.append(elements,j-1)
+                        if j not in right_border:
+                            elements = np.append(elements,j+1)
+                        elements = np.append(elements,j-1-num_patches_y)
+                        elements = np.append(elements,j+1+num_patches_y)
+                    elements = elements[(elements>=0)&(elements<num_patches)]
+                    
+                    if np.any(np.in1d(i, elements)):
+                        valid = False
+                        # print("restart")
+                        # print("i ",i)
+                        # print(np.in1d(i, elements))
+                        break
+                                    
+                if valid:
+                    break
+            #print("mmm ",mmm)      
+            
+        patches = tf.tensor_scatter_nd_update(patches, tf.expand_dims(idx_rotate, 1), keras_augment(tf.gather(patches, idx_rotate),ksizes))
+        patches = tf.tensor_scatter_nd_update(patches, tf.expand_dims(idx_mask, 1), tf.zeros_like(tf.gather(patches, idx_mask)))
+
+        step_x, step_y = ksizes
+        x,y = 0,-1
+        for i,patch in enumerate(patches):
+            if y >= num_patches_y:
+                y = 0
+                if x >= num_patches_x:
+                    x = 0
+                else: x = x+1
+            else: 
+                y = y+1
+        
+            x_pos, y_pos = x * step_x, y * step_y
+        
+            reconstructed_arr[pat,:,x_pos:x_pos + step_x, y_pos:y_pos + step_y,:] = patch
+
+    return reconstructed_arr
+
+    
+    #[img_pltsave([reconstructed_arr[i],asd[i]]) for i in range(reconstructed_arr.shape[0])]
+    
+    #img_pltsave([reconstructed_arr[0]])
+    #img_pltsave([reconstructed_arr[1]])
+
+# import timeit
+# n = 10
+# result = timeit.timeit(stmt='augment_patches(asd)', globals=globals(), number=n)
+# print(f"Execution time is {result / n} seconds")
 
 asd = y_train[0]
-
-print(asd.shape)
-
-
-
-image_size = (320)
-patch_size = 32  # Size of the patches to be extract from the input images
-cube = 32
-stride = 32
-num_patches = (image_size // patch_size) ** 2
-projection_dim = 64
-print(num_patches)
-
-
-
-ksizes = [32*3,32*3]
-strides = [32*3,32*3]
-# ksizes = [32,32]
-# strides = [32,32]
-
-
-patches = Patches(ksizes,strides)(asd)
-
-
-patches = keras_augment(patches,ksizes)
-
-
-# encoded_patches = PatchEncoder(num_patches, projection_dim)(patches)
-
-
-
-import importlib
-import img_display
-importlib.reload(img_display)
-from img_display import *
-
-
-img_pltsave([asd[0]])
-
-
-patch_pltsave(patches[0],ksizes)
-
-#patch_pltsave(encoded_patches[0],ksizes)
-
-
-#%%
-
-
-from skimage.util.shape import view_as_windows
-
-from skimage.util import view_as_blocks
-#%%
-
-print(patches.shape)
-
-#%%
-
-size = 32 # patch size
-
-qwe = view_as_windows(patches.numpy(), (32,size,size))#[...,0,:,:]
-print(qwe.shape)
-
-zxc = view_as_blocks(patches.numpy(), (1,size,size))#[...,0,:,:]
-print(zxc.shape)
-
-#%%
-
-reconstructed_arr = np.zeros_like(asd)
-
-print("patches ",patches.shape)
-print("reconstructed_arr ",reconstructed_arr.shape)
-step = ksizes[0]
-for x in range(reconstructed_arr.shape[1]):
-        for y in range(reconstructed_arr.shape[2]):
-            x_pos, y_pos = x * step, y * step
-            reconstructed_arr[x_pos:x_pos + 128, y_pos:y_pos + 128] = patches[0,x, y,  ...]
-
-
-
-#%%
-#num_patches_x,num_patches_y = [(asd.shape[i+2] // k) ** 2 for i,k in enumerate(ksizes)]
-num_patches_x,num_patches_y = [(asd.shape[i+2] // k)  for i,k in enumerate(ksizes)]
-
-#for i,k in enumerate(ksizes):
-#    print(asd.shape[i+1])
-#    print(k)
-
-print("num_patches_x ", num_patches_x)
-print("num_patches_y ",num_patches_y)
-
-#%%
-reconstructed_arr = np.zeros_like(asd)
-num_patches_x,num_patches_y = [(asd.shape[i+2] // k)  for i,k in enumerate(ksizes)]
-
-print("patches ",patches.shape)
-print("reconstructed_arr ",reconstructed_arr.shape)
-
-
-step_x, step_y = ksizes
-i = 0
-
-for pat in range(reconstructed_arr.shape[0]):
-    #for z in range(reconstructed_arr.shape[1]):
-    #for x in range(reconstructed_arr.shape[2]):
-    #    for y in range(reconstructed_arr.shape[3]):
-    for x in range(num_patches_x):
-        for y in range(num_patches_y):
-            x_pos, y_pos = x * step_x, y * step_y
-            # print("y ",y)
-            # print("x ",x)
-            # print("y_pos + step_y ",y_pos + step_y)
-            
-            reconstructed_arr[pat,:,x_pos:x_pos + step_x, y_pos:y_pos + step_y] = patches[i]
-            i = i+1
-
-
-reconstructed_arr.shape
-
-
-img_pltsave([reconstructed_arr[0]])
-
-#%%
-
-num_patches_x,num_patches_y = [(asd.shape[i+2] // k)  for i,k in enumerate(ksizes)]
-
-print("num_patches_x ", num_patches_x)
-print("num_patches_y ",num_patches_y)
-
-
-#%%
-
-
-reconstructed_arr = np.zeros_like(asd)
-num_patches_x,num_patches_y = [(asd.shape[i+2] // k)  for i,k in enumerate(ksizes)]
-
-print("patches ",patches.shape)
-print("reconstructed_arr ",reconstructed_arr.shape)
-
-
-step_x, step_y = ksizes
-# i = 0
-
-# for pat in range(reconstructed_arr.shape[0]):
-#     #for z in range(reconstructed_arr.shape[1]):
-#     #for x in range(reconstructed_arr.shape[2]):
-#     #    for y in range(reconstructed_arr.shape[3]):
-#     for x in range(num_patches_x):
-#         for y in range(num_patches_y):
-#             x_pos, y_pos = x * step_x, y * step_y
-#             # print("y ",y)
-#             # print("x ",x)
-#             # print("y_pos + step_y ",y_pos + step_y)
-            
-#             reconstructed_arr[pat,:,x_pos:x_pos + step_x, y_pos:y_pos + step_y] = patches[i]
-#             i = i+1
-
-pat,x,y = 0,0,-1
-#for patch,x,y in zip(patches,range(num_patches_x),range(num_patches_y)):
-#for patch,y in zip(patches,range(num_patches_y)):
-for patch in patches:
-    
-    if x >= num_patches_x and y >= num_patches_y:
-        pat = pat+1
-
-    if y >= num_patches_y:
-        y = 0
-        x = x+1
-    else: y = y+1
-    
-    if x >= num_patches_x:
-        x = 0
- 
-    print("x ",x)
-    print("y ",y)
-    x_pos, y_pos = x * step_x, y * step_y
-    reconstructed_arr[pat,:,x_pos:x_pos + step_x, y_pos:y_pos + step_y] = patch
-    #y = y+1
-
-
-
-
-reconstructed_arr.shape
-
-
-img_pltsave([reconstructed_arr[0]])
-
-#%%
-
+reconstructed_arr = augment_patches(asd)
 img_pltsave([arr for arr in reconstructed_arr])
+#img_pltsave([arr for arr in asd])
+
+#%%
+#img_pltsave([arr for arr in asd])
+    
+
+img_pltsave([[reconstructed_arr[i],asd[i]] for i in range(reconstructed_arr.shape[0])])
