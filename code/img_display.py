@@ -11,43 +11,22 @@ def img_pltsave(data, savepath=""):
     
     :param data: the data to be displayed
     """
-
-    # for i in range(len(data)):
-    #     if len(data[i].shape)>4:
-    #         data[i] = data[i][0]#np.squeeze(data[i], axis=0)
-
     if not isinstance(data, list):
        data = [data]
-        
-    rows_data = len(data)
-    # if len(data[0].shape) >3:
-    #     if (data[0].shape[0])>6:
-    #         for i in range(len(data)):
-    #             data[i] = data[i][::int((data[i].shape[0])/4)]
-    #     columns_data = data[0].shape[1]#max([data[i].shape[-2] for i in range(rows_data)])
-    # else: 
-    #     columns_data = rows_data
-
-    #     if (data[0].shape[0])>6:
-    #         for i in range(len(data)):
-    #             data[i] = data[i][::int((data[i].shape[0])/4)]
-    #     rows_data = data[0].shape[1]#max([data[i].shape[-1] for i in range(rows_data)])
-
-    
     for i in range(len(data)):
         if len(data[i].shape)>4:
-            data[i] = data[i][0]
-        if (data[i].shape[0])>6:
+             data[i] = data[i][0]
+        if len(data[i].shape)<4:
+            data[i] = tf.expand_dims(data[i], axis=0)
+        elif (data[i].shape[0])>6:
             data[i] = data[i][::int((data[i].shape[0])/5)]
-            #data[i] = data[i][:,:,::int((data[i].shape[-2])/5)]
-    #columns_data = data[0].shape[0]
-    if len(data[0].shape)<4:
-        columns_data = 1
-    else: columns_data = data[0].shape[0]#columns_data = data[0].shape[-2]
-    
 
-    aspect_ratio = data[0].shape[1] / data[0].shape[2]
-    #aspect_ratio = data[0].shape[0] / data[0].shape[1]
+    rows_data = len(data)
+    data_shape = data[0].shape
+    columns_data = data_shape[0]
+
+    aspect_ratio = data_shape[1] / data_shape[2]
+    #aspect_ratio = data_shape[0] / data_shape[1]
     size_multiplier = 5
     nrow = rows_data*aspect_ratio*size_multiplier
     ncol = columns_data*size_multiplier
@@ -63,25 +42,21 @@ def img_pltsave(data, savepath=""):
             right=1. - 0.5 / (ncol + 1)),
         figsize=(ncol + 1, nrow + 1), 
     )
-    if rows_data >1 or columns_data >1 :
-        for i in range(rows_data):
-            for j in range(columns_data):
-                if len(data[i].shape) >3 and len(data)>1:
-                    #axarr[i, j].imshow(data[i][:, :, j], cmap="gray")
-                    axarr[i, j].imshow(data[i][j], cmap="gray")
-                    axarr[i, j].axis("off")
-                elif len(data[i].shape) >3:
-                    #axarr[j].imshow(data[i][:, :, j], cmap="gray")    
-                    axarr[j].imshow(data[i][j], cmap="gray")
-                    axarr[j].axis("off")
-                else:
-                    #axarr[j].imshow(data[j][:, :, i], cmap="gray")
-                    axarr[j].imshow(data[j][i], cmap="gray")
-                    axarr[j].axis("off")
-    else:
-        axarr.imshow(data[0], cmap="gray")    
-        axarr.axis("off")
-
+    for i in range(rows_data):
+        for j in range(columns_data):
+            if columns_data>1 and rows_data>1:
+                #axarr[i, j].imshow(data[i][:, :, j], cmap="gray")
+                axarr[i, j].imshow(data[i][j], cmap="gray")
+                axarr[i, j].axis("off")
+            elif rows_data == 1 & columns_data == 1:
+                axarr.imshow(data[0][0], cmap="gray")    
+                axarr.axis("off")
+            elif columns_data>1:
+                axarr[j].imshow(data[i][j], cmap="gray")
+                axarr[j].axis("off")
+            elif rows_data>1:
+                axarr[i].imshow(data[i][j], cmap="gray")
+                axarr[i].axis("off")
     if savepath:
         print(f"saving image to {savepath}")
         plt.savefig(savepath)
@@ -93,7 +68,8 @@ def img_pltsave(data, savepath=""):
 
 # import importlib
 # import img_display
-# importlib.reload(img_display)
+## importlib.reload(img_display)
+# importlib.reload(sys.modules['img_display'])
 # from img_display import *
 
 

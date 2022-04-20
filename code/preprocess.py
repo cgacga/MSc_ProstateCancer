@@ -243,144 +243,14 @@ def normalize(patients_arr,patients_df):
             normalization_filter.SetWindowMaximum(t2_upper)
             normalization_filter.SetWindowMinimum(t2_lower)
         elif "ADC" in pat.tag:
-            normalization_filter.SetWindowMaximum(adc_max) #400
-            normalization_filter.SetWindowMinimum(adc_min) #-1000
+            normalization_filter.SetWindowMaximum(adc_max) 
+            normalization_filter.SetWindowMinimum(adc_min) 
     
         float_series = cast_image_filter.Execute(patients_arr[pat.idx])
         patients_arr[pat.idx] = normalization_filter.Execute(float_series)
 
     print(f"\nNormalization finished {(time.time() - start_time):.0f} s")
     return patients_arr
-
-
-def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
-    """
-    Convert the sitk image to np.array and reshape it to (num_of_slices, height, width, channels)
-    
-    :param train_test_val_split: The output of the image_to_np_reshape function
-    :param patients_df: The dataframe containing the patient information
-    :return: a list of 3 np.arrays. Each array contains the images of the patients in the train, test and validation sets.
-    """
-
-    print(f"\n{'Converting sitk image to np.array and reshape'.center(50, '.')}")
-
-    start_time = time.time()
-    output = []
-
-    # Looping through the train, test, validation sets
-    for i,patients_arr in enumerate(train_test_val_split):
-
-        reshaped_arr = np.empty(patients_arr.shape[1],dtype=object)
-        for i in range(len(reshaped_arr)):
-            # reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
-            dim = patients_arr[0,i].GetSize()
-            reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0],channels)),dtype=np.float32)
-            #reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[1],dim[0],dim[2],channels)),dtype=np.float32)
-            
-        for j,pat in enumerate(patients_arr):
-            for k,pat_slices in enumerate(pat):
-                #TODO: tf.sparse.expand_dims?
-                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-                # print(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)).dtype)
-                # print(tf.shape(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices))))
-                # print(type(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices))))
-                # print()
-
-                # print(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1).dtype)
-                # print(tf.shape(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1)))
-                # print(type(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1)))
-                # print()
-
-
-                # print(sitk.GetArrayFromImage(pat_slices).dtype)
-                # print(tf.shape(sitk.GetArrayFromImage(pat_slices)))
-                # print(type(sitk.GetArrayFromImage(pat_slices)))
-                # print()
-                
-                # qwe = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),dtype=tf.float32),-1), channels, -1)
-                # print(qwe.dtype)
-                # print(tf.shape(qwe))
-                # print(type(qwe))
-                # print()
-
-                # bebe = tf.sparse.from_dense(qwe)
-                # print(bebe.dtype)
-                # print(tf.shape(bebe))
-                # print(type(bebe))
-                # print()
-
-                
-                # qwe = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-                # print(qwe.dtype)
-                # print(tf.shape(qwe))
-                # print(type(qwe))
-                # print()
-
-                # bebe = tf.sparse.from_dense(qwe)
-                # print(bebe.dtype)
-                # print(tf.shape(bebe))
-                # print(type(bebe))
-                # print()
-
-                # print(tf.shape(tf.repeat(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1), channels, -1)))
-                # print(type(tf.repeat(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1), channels, -1)))
-                # print()
-
-                # asd = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-                # reshaped_arr[k][j] = tf.sparse.from_dense(asd)
-
-                # reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-
-                reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-
-                
-                # reshaped_arr[k][j] = np.repeat(np.expand_dims(sitk.GetArrayFromImage(pat_slices),-1), channels, -1)
-
-
-
-                # reshaped_arr = tf.assign(reshaped_arr[k][j],tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1))
-
-                # reshaped_arr[k][j] = tf.repeat(tf.sparse.expand_dims(tf.sparse.from_dense(sitk.GetArrayFromImage(pat_slices)),-1), channels, -1)
-                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices).transpose(1,2,0)),-1), channels, -1)
-        
-        for i in range(len(reshaped_arr)):
-            reshaped_arr[i]=tf.convert_to_tensor(reshaped_arr[i],dtype=tf.float32)
-            # reshaped_arr[i]=tf.sparse.from_dense(reshaped_arr[i])
-        output.append(reshaped_arr)
-    
-    # Updating the dataframe with new indexes
-    patients_df[["tag_idx","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([x[1],x[0]]))
-    patients_df.drop(columns="idx", inplace=True)
-
-    print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
-
-
-    return output
-
-
-# def expand_dims(array_lst,dim=3):
-#     """
-#     Given a list of lists of images, expand the dimensions of the images by 1.
-#         This is done to make the images compatible with the convolutional layers.
-#         The function is used to expand the dimensions of the input.
-#         And converting one channel to three channel images.
-    
-#     :param array_lst: a list of lists of images
-#     :return: A list of lists of tensors. 
-#     """
-#     lst = True
-#     if not isinstance(array_lst, list):
-#         array_lst = [array_lst]
-#         lst = False
-#     elif len(array_lst)<2:
-#         lst = False
-#     for i,array in enumerate(array_lst):
-#         for j,img_set in enumerate(array):
-#             # array_lst[i][j] = tf.expand_dims(img_set,-1)
-#             array_lst[i][j] = tf.repeat(tf.expand_dims(img_set,-1), dim, -1)
-#     if lst: return array_lst
-#     else: return array_lst[0]
-
 
 
 def train_test_validation(patients_arr, patients_df, ratio):
@@ -415,7 +285,7 @@ def train_test_validation(patients_arr, patients_df, ratio):
 
     return x_train, x_test, x_val
 
-def train_test(patients_arr, patients_df, ratio):
+def train_val(patients_arr, patients_df, ratio):
     """
     The function takes in the image array and dataframe and the split ratio.
     It then splits the array into training, test and validation sets and updates the dataframe.
@@ -431,7 +301,7 @@ def train_test(patients_arr, patients_df, ratio):
     print(f"\n{'Splitting'.center(50, '.')}")
     train_ratio,test_ratio = ratio
     # splitting the data into training, test and validation sets
-    x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=train_ratio, random_state=42, shuffle=True)
+    x_train, x_val, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=train_ratio, random_state=42, shuffle=True)
 
     # Update the dataframe with the new indexes
     df_idx = np.concatenate([train_df, test_df])
@@ -441,10 +311,60 @@ def train_test(patients_arr, patients_df, ratio):
     
 
     print(f"\n|\tTrain\t|\tTest\t|")
-    print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|")
-    print(f"|\t{len(x_train)}\t|\t{len(x_test)}\t|")
+    print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
+    print(f"|\t{len(x_train)}\t|\t{len(x_val)}\t|")
 
-    return x_train, x_test
+    return x_train, x_val
+
+
+def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
+    """
+    Convert the sitk image to np.array and reshape it to (num_of_slices, height, width, channels)
+    
+    :param train_test_val_split: The output of the image_to_np_reshape function
+    :param patients_df: The dataframe containing the patient information
+    :return: a list of 3 np.arrays. Each array contains the images of the patients in the train, test and validation sets.
+    """
+
+    print(f"\n{'Converting sitk image to np.array and reshape'.center(50, '.')}")
+
+    start_time = time.time()
+    output = []
+
+    # Looping through the train, test, validation sets
+    for i,patients_arr in enumerate(train_test_val_split):
+
+        reshaped_arr = np.empty(patients_arr.shape[1],dtype=object)
+        for i in range(len(reshaped_arr)):
+            # reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
+            dim = patients_arr[0,i].GetSize()
+            
+            #reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0],channels)),dtype=np.float32)
+
+            reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0])),dtype=np.float32)
+
+            #reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[1],dim[0],dim[2],channels)),dtype=np.float32)
+            
+        for j,pat in enumerate(patients_arr):
+            for k,pat_slices in enumerate(pat):
+                
+                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+                reshaped_arr[k][j] = tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32)
+                
+
+                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices).transpose(1,2,0)),-1), channels, -1)
+        
+        for i in range(len(reshaped_arr)):
+            reshaped_arr[i]=tf.convert_to_tensor(tf.expand_dims(reshaped_arr[i],-1),dtype=tf.float32)
+        output.append(reshaped_arr)
+    
+    # Updating the dataframe with new indexes
+    patients_df[["tag_idx","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([x[1],x[0]]))
+    patients_df.drop(columns="idx", inplace=True)
+
+    print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
+
+    return output
 
 
 def preprocess(data_path, tags, nslices = False):
@@ -475,11 +395,11 @@ def preprocess(data_path, tags, nslices = False):
     pat_slices = normalize(pat_slices, pat_df)
 
     # y_train, y_test, y_val  = train_test_validation(pat_slices, pat_df, ratio=[0.7,0.2,0.1])
-    y_train, y_test  = train_test(pat_slices, pat_df, ratio=[0.7,0.3])
+    y_train, y_val  = train_val(pat_slices, pat_df, ratio=[0.7,0.3])
 
-    y_train, y_test  = image_to_np_reshape([y_train, y_test],pat_df,channels=3)
+    y_train, y_val  = image_to_np_reshape([y_train, y_val],pat_df,channels=1)
 
-    # y_train, y_test, y_val  = image_to_np_reshape([y_train, y_test, y_val],pat_df,channels=3)
+    # y_train, y_val, y_test  = image_to_np_reshape([y_train, y_val, y_test],pat_df,channels=3)
 
     # print(y_train.shape)
     # print(y_train[0].shape)
@@ -501,9 +421,8 @@ def preprocess(data_path, tags, nslices = False):
     # print((y_train[0][0][0][0][0]).shape)
 
 
-    #x_train, x_test, x_val = expand_dims([x_train, x_test, x_val],dim=1)
+    #x_train, x_val, x_val = expand_dims([x_train, x_val, x_val],dim=1)
         
     print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
-    return y_train, y_test, pat_df
-
+    return y_train, y_val, pat_df

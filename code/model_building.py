@@ -4,8 +4,10 @@ import os
 from xml.dom import VALIDATION_ERR
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.models import Model
+# from tensorflow.keras import layers
+# from tensorflow.keras.models import Model
+from keras import layers
+from keras.models import Model
 # os.environ["KERAS_BACKEND"] = "tensorflow"
 import segmentation_models_3D as sm
 sm.set_framework('tf.keras')
@@ -53,7 +55,7 @@ import time
 
 
 # def train_model(model, path, train_data, val_data):
-def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
+def train_model(model, path, trainDS, valDS):
     """
     Function to train the model.
     
@@ -74,11 +76,8 @@ def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
 
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
-    batch_size = 2
-    #32 -> 34147MiB / 40536MiB (2 gpu -> 16 each)
-    #16 ->  34147MiB / 40536MiB 
-    #8  -> 17819MiB / 40536MiB
-    print(f"Batch size = {batch_size}")
+    #batch_size = 2
+    
 
     # train_data = train_data.batch(batch_size)
     # val_data = val_data.batch(batch_size)
@@ -88,7 +87,6 @@ def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
     # train_data = train_data.with_options(options)
     # val_data = val_data.with_options(options)
     
-    print(f"x_train_noisy shape = {x_train_noisy.shape}")
 
     # from tensorflow.python.ops.numpy_ops import np_config
     # np_config.enable_numpy_behavior()
@@ -100,19 +98,17 @@ def train_model(model, path, x_train_noisy,x_train, x_test_noisy, x_test):
 
     model.fit(
         # x=train_data,
-        x=x_train_noisy,
-        y=x_train,
+        trainDS,
+        validation_data=valDS,
         epochs=500,
-        batch_size=batch_size,
+        #batch_size=batch_size,
         verbose=2,
-        # validation_data=val_data,
-        validation_data=(x_test_noisy,x_test),
+        
         # callbacks=[checkpoint_cb, early_stopping_cb],
         callbacks=early_stopping_cb,
     )
 
     # print("\n"+f"{model.name} - Train accuracy:\t {round (model.history['acc'][0], 4)}".center(50, '.'))
-    
 
     return model
 
@@ -142,7 +138,8 @@ def get_unet_model(dim, name="autoencoder"):
     return autoencoder
 
 
-def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
+
+def model_building(shape, savepath, trainDS, valDS ):
     """
     Given a dataframe of patients, a modality (e.g. "ct"), and the corresponding x and y data, 
     this function returns a trained model for the modality
@@ -158,8 +155,7 @@ def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
     print(f" Model building started".center(50, '_'))
     start_time = time.time()
 
-    
-    #TODO: concatinate training and validation sets to one 30% set
+
     
     # shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
     gpus = tf.config.list_physical_devices('GPU')
@@ -176,8 +172,6 @@ def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
         # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
         # shape=x_data.shape
         model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
-        
-
 
     #TODO: load selected weights from sbatch variable if exists
     
@@ -190,7 +184,7 @@ def model_building(shape, savepath, x_data, y_data, x_val,y_val ):
                 print("Loaded Weights")
         else: model.load_weights(os.path.join(savepath,"weights"))        
     else: 
-        model = train_model(model, savepath, x_data, y_data, x_val, y_val)
+        model = train_model(model, savepath, trainDS, valDS)
         # model.save(savepath)
         model.save_weights(os.path.join(savepath,"weights"))
 

@@ -71,10 +71,10 @@ def main(**kwargs):
     start_time = time.time()
     data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
     #tags = {"ADC": None,"t2tsetra": (32,320,320)} 
-    tags = {"t2tsetra": (32,320,320)} 
+    tags = {"t2tsetra": None} 
 
-    y_train, y_test, y_val, pat_df = preprocess(data_path,tags,False)
-    # x_train, x_test, x_val, y_train, y_test, y_val = data_augmentation(pat_slices, pat_df)
+    y_train, y_val, pat_df = preprocess(data_path,tags)
+    # x_train, x_test, x_val, y_train, y_val, y_val = data_augmentation(pat_slices, pat_df)
 
     # x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
     # del pat_slices
@@ -95,10 +95,17 @@ def main(**kwargs):
         # models[modality] = model_building(shape, modelpath, train_data, val_data)
         #https://stackoverflow.com/questions/52724022/model-fits-on-a-single-gpu-but-script-crashes-when-trying-to-fit-on-multiple-gpu
 
-        model = model_building(shape, modelpath, x_train[idx],y_train[idx], x_test[idx], y_test[idx])
+        #model = model_building(shape, modelpath, x_train[idx],y_train[idx], x_test[idx], y_val[idx])
+        
+
+        trainDS, valDS = augment_build_datasets(y_train[idx], y_val[idx])
+
+        model = model_building(shape, modelpath, trainDS, valDS)
  
 
-        pred_test = tf.expand_dims(x_test[idx][0],axis=0)
+        #pred_test = tf.expand_dims(y_train[idx][0],axis=0)
+        pred_test = augment_patches(y_val[idx][0])
+        
         print("shape staert")
         print(pred_test.shape)
         print("prediction")
@@ -111,15 +118,25 @@ def main(**kwargs):
         else:
             predictions = model.predict(pred_test)
         print("saving img")
-        img_pltsave([x_test[idx][0], x_test[idx][0], predictions],os.path.join(modelpath,"test_set.png"))
+        img_pltsave([y_val[idx][0], pred_test, predictions],os.path.join(modelpath,"y_val_0.png"))
 
-        pred_val = tf.expand_dims(x_val[idx][0],axis=0)
+
+
+        pred_val = augment_patches(y_val[idx][0:5])
+        print("shape 0:5")
+        print(pred_val.shape)
+        print("prediction")
+        
         if len(gpus)>1:
             with strategy.scope():
                 predictions = model.predict(pred_val)
         else: predictions = model.predict(pred_val)
-        img_pltsave([x_val[idx][0], x_val[idx][0], predictions],os.path.join(modelpath,"validation_set.png"))
+        print("prediction shape")
+        print(predictions.shape)
+        print("saving img 05")
+        img_pltsave([asd for asd in (np.hstack([y_val[idx][0:5], pred_val, predictions]).reshape((-1,)+pred_val.shape[1:]))],os.path.join(modelpath,"multiple_05.png"))
 
+        
         models[modality] = model
 
         # loss, acc = models[modality].evaluate(x_test_noisy[idx], x_test[idx], verbose=2)
@@ -133,7 +150,7 @@ def main(**kwargs):
     
     
 
-    #test_result = t2_model.evaluate(x_test,y_test, verbose = 1)
+    #test_result = t2_model.evaluate(x_test,y_val, verbose = 1)
     #print("Test accuracy :\t", round (test_result[1], 4))
 
    
