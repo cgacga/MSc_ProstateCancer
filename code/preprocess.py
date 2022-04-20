@@ -339,23 +339,24 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
             # reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
             dim = patients_arr[0,i].GetSize()
             
-            #reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0],channels)),dtype=np.float32)
+            reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0],channels)),dtype=np.float32)
 
-            reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0])),dtype=np.float32)
+            # reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0])),dtype=np.float32)
 
             #reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[1],dim[0],dim[2],channels)),dtype=np.float32)
             
         for j,pat in enumerate(patients_arr):
             for k,pat_slices in enumerate(pat):
                 
-                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-                reshaped_arr[k][j] = tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32)
+                reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
+                # reshaped_arr[k][j] = tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32)
                 
 
                 #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices).transpose(1,2,0)),-1), channels, -1)
         
         for i in range(len(reshaped_arr)):
-            reshaped_arr[i]=tf.convert_to_tensor(tf.expand_dims(reshaped_arr[i],-1),dtype=tf.float32)
+            # reshaped_arr[i]=tf.convert_to_tensor(tf.expand_dims(reshaped_arr[i],-1),dtype=tf.float32)
+            reshaped_arr[i]=tf.convert_to_tensor(reshaped_arr[i],dtype=tf.float32)
         output.append(reshaped_arr)
     
     # Updating the dataframe with new indexes
@@ -421,7 +422,7 @@ def preprocess(data_path, tags, nslices = False):
     # print((y_train[0][0][0][0][0]).shape)
 
 
-    #x_train, x_val, x_val = expand_dims([x_train, x_val, x_val],dim=1)
+#x_train, x_val, x_val = expand_dims([x_train, x_val, x_val],dim=1)
         
     print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 

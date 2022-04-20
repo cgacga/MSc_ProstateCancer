@@ -9,12 +9,12 @@ from keras import layers
 
 
 
-def keras_augment(images,ksizes,depth=32,channels=1):
+def keras_augment(images,ksizes,depth,channels):
 
     ksize_height, ksize_width = ksizes
 
-    images = tf.reshape(images, [-1, depth,ksize_height,ksize_width,channels])
-        
+    # images = tf.reshape(images, [-1, depth,ksize_height,ksize_width,channels])
+
     data_augmentation = tf.keras.Sequential(
         [
             layers.Permute(dims=(2,3,1,4)),
@@ -32,7 +32,7 @@ def keras_augment(images,ksizes,depth=32,channels=1):
         name="data_augmentation",
     )
     images = data_augmentation(images)
-    
+
     return images
 
 
@@ -64,8 +64,10 @@ def augment_patches(patients):
     if len(patients.shape) < 5:
         patients = tf.expand_dims(patients, axis=0)
     patients_shape = tf.shape(patients)
-    depth = tf.range(patients_shape[1])
-    channels = tf.range(patients_shape[-1])
+    depth = patients_shape[1]
+    channels = patients_shape[-1]
+    depth_range = tf.range(patients_shape[1])
+    channels_range = tf.range(patients_shape[-1])
     # reconstructed_arr = np.zeros_like(patients)
     #reconstructed_arr = tf.zeros_like(patients)
     reconstructed_arr = tf.TensorArray(patients.dtype, size=0, dynamic_size=True, clear_after_read=True)
@@ -166,7 +168,7 @@ def augment_patches(patients):
                     break
             #print("mmm ",mmm)      
             
-        patches = tf.tensor_scatter_nd_update(patches, tf.expand_dims(idx_rotate, 1), keras_augment(tf.gather(patches, idx_rotate),ksizes,32,1))
+        patches = tf.tensor_scatter_nd_update(patches, tf.expand_dims(idx_rotate, 1), keras_augment(tf.gather(patches, idx_rotate),ksizes,depth,channels))
         patches = tf.tensor_scatter_nd_update(patches, tf.expand_dims(idx_mask, 1), tf.zeros_like(tf.gather(patches, idx_mask)))
 
         step_x, step_y = tf.unstack(ksizes)
@@ -187,7 +189,7 @@ def augment_patches(patients):
             # idx = tf.stack([i1, i2, i3, i4, i5], axis=-1)
             # reconstructed_arr = tf.tensor_scatter_nd_update(reconstructed_arr, idx, tf.expand_dims(patch, 0))
 
-            i2,i3, i4, i5 = tf.meshgrid(depth ,tf.range(x_pos,x_pos + step_x),tf.range(y_pos,y_pos + step_y),channels,indexing='ij')
+            i2,i3, i4, i5 = tf.meshgrid(depth_range ,tf.range(x_pos,x_pos + step_x),tf.range(y_pos,y_pos + step_y),channels_range,indexing='ij')
             idx = tf.stack([i2, i3, i4, i5], axis=-1)
 
             slice = tf.tensor_scatter_nd_update(slice, idx, patch)
@@ -221,7 +223,7 @@ def augment_build_datasets(y_train,y_val):
                 batch_size = BATCH_SIZE
                 ,num_parallel_calls=tf.data.AUTOTUNE)
             .map(
-                lambda x, y: (tf.repeat(x,3,-1), tf.repeat(y,3,-1))
+                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
                 ,num_parallel_calls=tf.data.AUTOTUNE)
             .prefetch(
                 buffer_size = tf.data.AUTOTUNE))
@@ -231,7 +233,7 @@ def augment_build_datasets(y_train,y_val):
                 batch_size = BATCH_SIZE
                 ,num_parallel_calls=tf.data.AUTOTUNE)
             .map(
-                lambda x, y: (tf.repeat(x,3,-1), tf.repeat(y,3,-1))
+                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
                 ,num_parallel_calls=tf.data.AUTOTUNE)
             .prefetch(
                 buffer_size = tf.data.AUTOTUNE))
