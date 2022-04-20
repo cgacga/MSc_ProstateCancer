@@ -70,8 +70,8 @@ seed_all(42)
 def main(**kwargs):
     start_time = time.time()
     data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
-    #tags = {"ADC": None,"t2tsetra": (32,320,320)} 
-    tags = {"t2tsetra": None} 
+    tags = {"ADC": (32,128,96),"t2tsetra": None} 
+    #tags = {"t2tsetra": None} 
 
     y_train, y_val, pat_df = preprocess(data_path,tags)
     # x_train, x_test, x_val, y_train, y_val, y_val = data_augmentation(pat_slices, pat_df)
@@ -118,7 +118,7 @@ def main(**kwargs):
         else:
             predictions = model.predict(pred_test)
         print("saving img")
-        img_pltsave([y_val[idx][0], pred_test, predictions],os.path.join(modelpath,"y_val_0.png"))
+        img_pltsave([y_val[idx][0], pred_test, predictions],os.path.join(modelpath,f"y_val_0.png-{modality}"))
 
 
 
@@ -134,7 +134,7 @@ def main(**kwargs):
         print("prediction shape")
         print(predictions.shape)
         print("saving img 05")
-        img_pltsave([asd for asd in (np.hstack([y_val[idx][0:5], pred_val, predictions]).reshape((-1,)+pred_val.shape[1:]))],os.path.join(modelpath,"multiple_05.png"))
+        img_pltsave([asd for asd in (np.hstack([y_val[idx][0:5], pred_val, predictions]).reshape((-1,)+pred_val.shape[1:]))],os.path.join(modelpath,f"multiple_05.png-{modality}"))
 
         
         models[modality] = model
