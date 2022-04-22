@@ -1,5 +1,6 @@
 
 ### Img display ###
+import os
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
@@ -58,8 +59,8 @@ def img_pltsave(data, savepath=""):
                 axarr[i].imshow(data[i][j], cmap="gray")
                 axarr[i].axis("off")
     if savepath:
-        print(f"saving image to {savepath}")
-        plt.savefig(savepath)
+        print(f"saving image to as {savepath}.png")
+        plt.savefig(f"{savepath}.png")
         plt.clf()
     else:
         plt.show()
@@ -115,7 +116,7 @@ def patch_pltsave(patches, ksizes, savepath="", patch_depth = 32,channels=3):
 
     if savepath:
         print(f"saving image to {savepath}")
-        plt.savefig(savepath)
+        plt.savefig(f"{savepath}.png")
         plt.clf()
     else:
         plt.show()

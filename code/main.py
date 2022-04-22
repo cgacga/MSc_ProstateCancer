@@ -1,6 +1,6 @@
 #%%
 ### Importing libraries ###
-import os, sys, time, random
+import os, sys, time, random, gc
 import numpy as np
 import tensorflow as tf
 # from tensorflow.keras import backend as K
@@ -104,7 +104,7 @@ def main(**kwargs):
  
 
         #pred_test = tf.expand_dims(y_train[idx][0],axis=0)
-        pred_test = augment_patches(y_val[idx][0])
+        pred_test = tf.repeat(augment_patches(y_val[idx][0]),3,-1)
         
         print("shape staert")
         print(pred_test.shape)
@@ -118,11 +118,12 @@ def main(**kwargs):
         else:
             predictions = model.predict(pred_test)
         print("saving img")
-        img_pltsave([y_val[idx][0], pred_test, predictions],os.path.join(modelpath,f"y_val_0.png-{modality}"))
+        img_pltsave([y_val[idx][0], pred_test, predictions],os.path.join(modelpath,f"y_val_0_{modality}"))
 
 
 
-        pred_val = augment_patches(y_val[idx][0:5])
+        pred_val = tf.repeat(augment_patches(y_val[idx][0:5]),3,-1)
+        
         print("shape 0:5")
         print(pred_val.shape)
         print("prediction")
@@ -134,10 +135,16 @@ def main(**kwargs):
         print("prediction shape")
         print(predictions.shape)
         print("saving img 05")
-        img_pltsave([asd for asd in (np.hstack([y_val[idx][0:5], pred_val, predictions]).reshape((-1,)+pred_val.shape[1:]))],os.path.join(modelpath,f"multiple_05.png-{modality}"))
+        img_stack = np.stack([y_val[idx][0:5],pred_val,predictions],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_val.shape)))
+        img_pltsave([asd for asd in img_stack],os.path.join(modelpath,f"multiple_05_{modality}"))
 
         
         models[modality] = model
+        del model
+        del trainDS
+        del valDS
+        tf.keras.backend.clear_session()
+        gc.collect()
 
         # loss, acc = models[modality].evaluate(x_test_noisy[idx], x_test[idx], verbose=2)
         

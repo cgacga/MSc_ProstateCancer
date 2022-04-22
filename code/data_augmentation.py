@@ -238,6 +238,12 @@ def augment_build_datasets(y_train,y_val):
             .prefetch(
                 buffer_size = tf.data.AUTOTUNE))
 
+    gpus = tf.config.list_physical_devices('GPU')
+    strategy = tf.distribute.MirroredStrategy()
+    if len(gpus)>1:
+        trainDS = strategy.experimental_distribute_dataset(train_loader)
+        valDS = strategy.experimental_distribute_dataset(val_loader)
+
 
     print("\n"+f"Augment and build finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 

@@ -100,7 +100,7 @@ def train_model(model, path, trainDS, valDS):
         # x=train_data,
         trainDS,
         validation_data=valDS,
-        epochs=500,
+        epochs=100,
         #batch_size=batch_size,
         verbose=2,
         
@@ -172,8 +172,8 @@ def model_building(shape, savepath, trainDS, valDS ):
     else: 
         # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
         # shape=x_data.shape
-        #model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
-        model = get_unet_model(shape, f"asd")
+        model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+        #model = get_unet_model(shape, f"asd")
 
     #TODO: load selected weights from sbatch variable if exists
     
