@@ -1,67 +1,19 @@
 
 ### Model building ###
-import os
-from xml.dom import VALIDATION_ERR
+import os, time, json
 import tensorflow as tf
 from tensorflow import keras
-# from tensorflow.keras import layers
-# from tensorflow.keras.models import Model
-from keras import layers
-from keras.models import Model
-# os.environ["KERAS_BACKEND"] = "tensorflow"
 import segmentation_models_3D as sm
 sm.set_framework('tf.keras')
-import pandas as pd
-import time
+from img_display import *
 
-# def get_model(dim, name="autoencoder"):
-#     #TODO: remove this
-#     """
-#     It creates a model that accepts a 3D input of shape (width, height, depth, 1) and returns a 3D
-#     output of the same shape.
-    
-#     :param dim: The shape of the input data
-#     :param name: The Model's name
-#     :return: The autoencoder model
-#     """
-#     # shape = (width, height, depth, 1)
-#     print("\n"+f"{name} - compile model".center(50, '.'))
-#     #keras.backend.clear_session()
-    
-#     inputs = keras.Input(shape=(dim[0], dim[1], dim[2], 1))
-
-#     # Encoder
-#     x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(inputs)
-#     x = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
-#     x = layers.Conv3D(32, (3, 3, 3), activation="relu", padding="same")(x)
-#     encoded = layers.MaxPooling3D((2, 2, 2), padding="same")(x)
-
-#     # Decoder
-#     x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(encoded)
-#     x = layers.Conv3DTranspose(32, (3, 3, 3), strides=2, activation="relu", padding="same")(x)
-#     decoded = layers.Conv3D(1, (3, 3, 3), activation="sigmoid", padding="same")(x)
-
-#     # Autoencoder
-#     autoencoder = Model(inputs, decoded, name=name)
-#     opt = tf.keras.optimizers.Adam()
-#     learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
-#     opt.lr.assign(learning_rate)
-#     # print(f"Learning rate = {opt.lr.numpy()}")
-#     autoencoder.compile(opt, loss="binary_crossentropy")
-
-#     print(autoencoder.summary())
-
-#     return autoencoder
-
-
-# def train_model(model, path, train_data, val_data):
-def train_model(model, path, trainDS, valDS):
+def train_model(model, modality, trainDS, valDS):
     """
     Function to train the model.
     
     :param model: The model to train
-    :param x_data: The training data
-    :param y_data: The labels for the training data
+    :param trainDS: Training data
+    :param valDS: Validation data
     :return: The trained model.
     """
     print("\n"+f"{model.name} - training started".center(50, '.'))
@@ -71,8 +23,9 @@ def train_model(model, path, trainDS, valDS):
 
     # tf.keras.utils.plot_model(model,show_shapes=True,to_file=os.path.join(path,"model.png"))
     #intall pydot and graphviz
+    savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/"
     
-    checkpoint_cb = keras.callbacks.ModelCheckpoint(os.path.join(path,f"checkpoint_cb/{model.name}-checkpoint.h5"), save_best_only=True)
+    checkpoint_cb = keras.callbacks.ModelCheckpoint(os.path.join(savepath,f"checkpoint_cb/{model.name}-checkpoint.h5"), save_best_only=True)
 
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
@@ -96,6 +49,76 @@ def train_model(model, path, trainDS, valDS):
     #TODO: online loading of data with or without online augmentation
 
 
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(
+        #log_dir=f"../tb_logs/{os.environ['SLURM_JOB_NAME']}/{modality}",
+        log_dir=f"../tb_logs/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}",
+        histogram_freq=1,
+        write_graph=True,
+        write_images=True,
+        write_steps_per_second=False,
+        update_freq='epoch',
+        profile_batch=0,
+        embeddings_freq=0,
+        embeddings_metadata=None)
+
+
+
+    class PlotCallback(tf.keras.callbacks.Callback):
+        def __init__(self, x_val, params):
+            self.x_val = x_val
+            self.epoch = 0
+            self.savepath = f"../tb_logs/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
+            self.params = params
+
+            self.epoch_modulo = 10
+
+            logdir = os.path.abspath(self.savepath) #opp ^ (fra params)
+            self.file_writer = tf.summary.create_file_writer(logdir)
+                    
+        def plot_predictions(self):
+                
+                pred_sample = tf.repeat(self.model.predict(self.x_val),3,-1)
+                img_stack = np.stack([self.x_val,pred_sample],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_sample.shape)))
+
+                image = img_pltsave([img for img in img_stack],None,True)
+
+                #logdir = f"/bhome/cga2022/jobs/tb_logs/{savepath}"
+                with self.file_writer.as_default():
+                    tf.summary.image(f"name_{modality}", image, step=self.epoch)
+
+        def json_summary(self,logs):
+            
+            params = self.params
+            params["logs"] = logs
+            json_dict = json.dumps(params, indent=2)
+            summary = "".join("\t" + line for line in json_dict.splitlines(True))
+            
+            with self.file_writer.as_default():
+                tf.summary.text("modell_navn", summary, step=self.epoch)
+
+            
+        def on_epoch_end(self, epoch, logs=None):           
+            self.epoch = epoch+1                
+            
+            if self.epoch%self.epoch_modulo==0:
+                self.plot_predictions(self)
+                
+
+        def on_train_end(self, logs={}):
+
+            if not self.epoch%self.epoch_modulo==0:
+                self.plot_predictions(self)
+
+            self.json_summary(self,logs)
+            
+                
+
+
+    
+    #x_val,y_val = list(valDS.map(lambda x,y: (x[0:5], tf.repeat(y[0:5],3,-1))))[0]
+    x_val = list(valDS.map(lambda x,y: (x[0:5])))[0]
+    pltcallback = PlotCallback(x_val)
+
     model.fit(
         # x=train_data,
         trainDS,
@@ -105,31 +128,56 @@ def train_model(model, path, trainDS, valDS):
         verbose=2,
         
         # callbacks=[checkpoint_cb, early_stopping_cb],
-        callbacks=early_stopping_cb,
+        #callbacks=early_stopping_cb,
+        callbacks=[tensorboard_callback,early_stopping_cb,pltcallback],
     )
 
     # print("\n"+f"{model.name} - Train accuracy:\t {round (model.history['acc'][0], 4)}".center(50, '.'))
 
+    #try:   
+    #    model.summary()
+    #except:
+    #    print("\n"+f"{model.name} - Model summary failed".center(50, '.'))
+
     return model
 
-def get_unet_model(dim, name="autoencoder"):
+def get_unet_model(dim, modality="autoencoder"):
 
     # shape = (width, height, depth, 1)
-    print("\n"+f"{name} - compile unet model".center(50, '.'))
+    print("\n"+f"{modality} - compile unet model".center(50, '.'))
     #keras.backend.clear_session()
 
     #TODO: sbatch variable for unet backbone
-    autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
+    #autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
+    autoencoder = sm.Unet(
+        backbone_name = "vgg16",
+        input_shape=(None,None,None,3),
+        encoder_weights="imagenet",
+        classes = 1,
+        encoder_freeze=False,
+        decoder_block_type="transpose",
+        activation="sigmoid")
+    #https://github.com/ZFTurbo/segmentation_models_3D/blob/master/segmentation_models_3D/models/unet.py#L166
 
     #TODO: sbatch variable for learning_rate
     opt = tf.keras.optimizers.Adam()
     learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
     opt.lr.assign(learning_rate)
 
+    autoencoder._name = f"{modality}_{os.environ['SLURM_JOB_NAME']}"
+
     #TODO: check loss function?
     #TODO: add MSE and MAE for each epoch and save log
     #TODO: add loss and val loss function for each epoch
-    autoencoder.compile(opt, loss="binary_crossentropy")
+
+    reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE #SUM #NONE 
+    #https://www.tensorflow.org/api_docs/python/tf/keras/losses/MeanAbsoluteError
+    mse = tf.keras.losses.MeanSquaredError()#reduction)
+    mae = tf.keras.losses.MeanAbsoluteError()#reduction)
+    
+
+    autoencoder.compile(opt, loss=mse, metrics=["mse","mae"])
+
 
     print(autoencoder.summary())
 
@@ -139,7 +187,7 @@ def get_unet_model(dim, name="autoencoder"):
 
 
 
-def model_building(shape, savepath, trainDS, valDS ):
+def model_building(shape, modality, trainDS, valDS ):
     """
     Given a dataframe of patients, a modality (e.g. "ct"), and the corresponding x and y data, 
     this function returns a trained model for the modality
@@ -165,30 +213,35 @@ def model_building(shape, savepath, trainDS, valDS ):
         print("\nprint two gpus\n")
         
         with strategy.scope():
-            # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
-            model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+            #model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+            model = get_unet_model(shape, modality)
             
 
     else: 
         # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
         # shape=x_data.shape
-        model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+        #model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
+        model = get_unet_model(shape, modality)
         #model = get_unet_model(shape, f"asd")
 
     #TODO: load selected weights from sbatch variable if exists
     
     #model = train_model(model,x_data[idx], y_data[idx])
+    #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}"
+    savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/"
+    
+
     if os.path.isdir(savepath): 
         if len(gpus)>1:
             with strategy.scope():
                 # model.load_weights(os.path.join(savepath,"weights"))    
-                model.load_weights(savepath)
+                model.load_weights(os.path.join(savepath,modality)) #savepath)
                 print("Loaded Weights")
-        else: model.load_weights(os.path.join(savepath,"weights"))        
+        else: model.load_weights(os.path.join(savepath,modality))        
     else: 
-        model = train_model(model, savepath, trainDS, valDS)
+        model = train_model(model, modality, trainDS, valDS)
         # model.save(savepath)
-        model.save_weights(os.path.join(savepath,"weights"))
+        model.save_weights(os.path.join(savepath,modality))
 
     #TODO: save images from recreation, with noisy and clean included (use more than 5 images in the plot)
         

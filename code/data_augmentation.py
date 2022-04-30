@@ -201,7 +201,7 @@ def augment_patches(patients):
     return reconstructed_arr
 
 
-def augment_build_datasets(y_train,y_val):
+def augment_build_datasets(y_train,y_val, batch_size):
 
     print(f"Augment and build dataset started".center(50, '_'))
     start_time = time.time()
@@ -209,18 +209,18 @@ def augment_build_datasets(y_train,y_val):
     train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
     val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
     
-    BATCH_SIZE = 32
+    #batch_size = 32
 
     #32 -> 34147MiB / 40536MiB (2 gpu -> 16 each)
     #16 ->  34147MiB / 40536MiB 
     #8  -> 17819MiB / 40536MiB
-    print(f"Batch size = {BATCH_SIZE}")
+    print(f"Batch size = {batch_size}")
 
 
     trainDS = (
         train_loader
             .batch(
-                batch_size = BATCH_SIZE
+                batch_size = batch_size
                 ,num_parallel_calls=tf.data.AUTOTUNE)
             .map(
                 lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
@@ -230,7 +230,7 @@ def augment_build_datasets(y_train,y_val):
     valDS = (
         val_loader
             .batch(
-                batch_size = BATCH_SIZE
+                batch_size = batch_size
                 ,num_parallel_calls=tf.data.AUTOTUNE)
             .map(
                 lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))

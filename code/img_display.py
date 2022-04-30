@@ -1,12 +1,12 @@
 
 ### Img display ###
-import os
+import os, io
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 import tensorflow as tf
 
-def img_pltsave(data, savepath=""):
+def img_pltsave(data, savepath="", tensorboard=False):
     """
     Given a list of images, display them in a grid.
     
@@ -28,10 +28,10 @@ def img_pltsave(data, savepath=""):
 
     aspect_ratio = data_shape[1] / data_shape[2]
     #aspect_ratio = data_shape[0] / data_shape[1]
-    size_multiplier = 5
+    size_multiplier = 2
     nrow = rows_data*aspect_ratio*size_multiplier
     ncol = columns_data*size_multiplier
-    f, axarr = plt.subplots(
+    figure, axarr = plt.subplots(
         rows_data,
         columns_data,
         gridspec_kw=dict(
@@ -58,10 +58,49 @@ def img_pltsave(data, savepath=""):
             elif rows_data>1:
                 axarr[i].imshow(data[i][j], cmap="gray")
                 axarr[i].axis("off")
-    if savepath:
-        print(f"saving image to as {savepath}.png")
-        plt.savefig(f"{savepath}.png")
-        plt.clf()
+    if savepath:       
+        # if tensorboard_epoch:
+
+        #     return figure
+            #writer.add_figure(savepath, fig, global_step=global_step)
+            
+            # print(f"saving image as ../models/{savepath}.png")
+            # plt.savefig(f"../models/{savepath}", format='png')
+            
+            #return figure
+
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            plt.clf()
+            buf.seek(0)
+            # Convert PNG buffer to TF image
+            image = tf.image.decode_png(buf.getvalue(), channels=4)
+            # Add the batch dimension
+            image = tf.expand_dims(image, 0)
+
+            #logdir = f"/bhome/cga2022/jobs/tb_logs/{savepath}"
+            logdir = os.path.abspath(savepath)
+            file_writer = tf.summary.create_file_writer(logdir)
+            with file_writer.as_default():
+                tf.summary.image(f"Visualize Images", image, step=tensorboard_epoch)
+
+        # else:
+            print(f"saving image as {savepath}.png")
+            plt.savefig(f"{savepath}.png", format='png')
+            plt.clf()
+    elif tensorboard:
+        
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            plt.clf()
+            buf.seek(0)
+            # Convert PNG buffer to TF image
+            image = tf.image.decode_png(buf.getvalue(), channels=4)
+            # Add the batch dimension
+            image = tf.expand_dims(image, 0)
+
+            return image
     else:
         plt.show()
         plt.close()
@@ -121,3 +160,6 @@ def patch_pltsave(patches, ksizes, savepath="", patch_depth = 32,channels=3):
     else:
         plt.show()
         plt.close()
+
+
+

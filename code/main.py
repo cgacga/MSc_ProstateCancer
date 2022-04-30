@@ -27,8 +27,8 @@ if gpus:
     # Currently, memory growth needs to be the same across GPUs
     for gpu in gpus:
       tf.config.experimental.set_memory_growth(gpu, True)
-    logical_gpus = tf.config.list_logical_devices('GPU')
-    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    # logical_gpus = tf.config.list_logical_devices('GPU')
+    # print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:
     # Memory growth must be set before GPUs have been initialized
     print(e)
@@ -58,20 +58,22 @@ os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '2'
 # np.random.seed(42)
 
 # For reproducible results    
-def seed_all(s):
+def set_seed(s):
     random.seed(s)
     np.random.seed(s)
     tf.random.set_seed(s)
     os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
     os.environ['PYTHONHASHSEED'] = str(s) 
-seed_all(42)
+set_seed(42)
 
 
 def main(**kwargs):
     start_time = time.time()
     data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
+    
     tags = {"ADC": (32,128,96),"t2tsetra": None} 
     #tags = {"t2tsetra": None} 
+    tags = {"ADC": (32,128,96)} 
 
     y_train, y_val, pat_df = preprocess(data_path,tags)
     # x_train, x_test, x_val, y_train, y_val, y_val = data_augmentation(pat_slices, pat_df)
@@ -81,13 +83,19 @@ def main(**kwargs):
 
 
 
-    
+    #batchsize = {"ADC": 32, "t2tsetra": 2}
+    batchsize = {"ADC": 32, "t2tsetra": 2}
+
+
+
+
 
 
     models = {}
     for modality in tags.keys():
         # modelpath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}"
-        modelpath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}"
+        #modelpath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}"
+        #os.path.join(modelpath,f"multiple_05_{modality}"))
 
         shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality, case=False)].values[0]
         # train_data = tf.data.Dataset.from_tensor_slices((x_train_noisy[idx], x_train[idx]))
@@ -96,47 +104,39 @@ def main(**kwargs):
         #https://stackoverflow.com/questions/52724022/model-fits-on-a-single-gpu-but-script-crashes-when-trying-to-fit-on-multiple-gpu
 
         #model = model_building(shape, modelpath, x_train[idx],y_train[idx], x_test[idx], y_val[idx])
+
         
 
-        trainDS, valDS = augment_build_datasets(y_train[idx], y_val[idx])
+        trainDS, valDS = augment_build_datasets(y_train[idx], y_val[idx], batchsize[modality])
 
-        model = model_building(shape, modelpath, trainDS, valDS)
+        model = model_building(shape, modality, trainDS, valDS)
  
 
-        #pred_test = tf.expand_dims(y_train[idx][0],axis=0)
-        pred_test = tf.repeat(augment_patches(y_val[idx][0]),3,-1)
-        
-        print("shape staert")
-        print(pred_test.shape)
-        print("prediction")
+        sample = y_val[idx][0:5] #0:1 
 
+        aug_sample = augment_patches(sample)
+                        
         gpus = tf.config.list_physical_devices('GPU')
         strategy = tf.distribute.MirroredStrategy()
         if len(gpus)>1:
             with strategy.scope():
-                predictions = model.predict(pred_test)
-        else:
-            predictions = model.predict(pred_test)
-        print("saving img")
-        img_pltsave([y_val[idx][0], pred_test, predictions],os.path.join(modelpath,f"y_val_0_{modality}"))
-
-
-
-        pred_val = tf.repeat(augment_patches(y_val[idx][0:5]),3,-1)
+                pred_sample = model.predict(tf.repeat(augment_patches(aug_sample),3,-1))
+        else: pred_sample = model.predict(tf.repeat(augment_patches(aug_sample),3,-1))
         
-        print("shape 0:5")
-        print(pred_val.shape)
-        print("prediction")
+        img_stack = np.stack([aug_sample,pred_sample],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_sample.shape)))
+
+        #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_NAME']}_{modality}"
+        # savepath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
+
+        #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
+
+        savepath = f"{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
+
         
-        if len(gpus)>1:
-            with strategy.scope():
-                predictions = model.predict(pred_val)
-        else: predictions = model.predict(pred_val)
-        print("prediction shape")
-        print(predictions.shape)
-        print("saving img 05")
-        img_stack = np.stack([y_val[idx][0:5],pred_val,predictions],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_val.shape)))
-        img_pltsave([asd for asd in img_stack],os.path.join(modelpath,f"multiple_05_{modality}"))
+
+
+        img_pltsave([img for img in img_stack],savepath)
+        #os.path.join(modelpath,f"multiple_05_{modality}"))
 
         
         models[modality] = model
@@ -182,15 +182,21 @@ def main(**kwargs):
 # df, x_train, x_test, x_val, x_train_noisy, x_test_noisy = main()
 
 if __name__ == '__main__':
-    print(f"Num GPUs Available: {len(tf.config.list_physical_devices('GPU'))}") 
+    print()
     print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
     print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
-    print(f"tf version {tf.__version__}")
+    print(f"tf version - {tf.__version__}")
+    print(f"N GPUs Available: {len(tf.config.list_physical_devices('GPU'))}") 
+    print()
     
     if len(sys.argv)>1:
         print(sys.argv)
         kwargs={kw[0]:kw[1] for kw in [ar.split('=') for ar in sys.argv if ar.find('=')>0]}
+        #import json
+        #kwargs=json.loads(sys.argv[1])
         print(f"kwargs = {kwargs}")
+
+
         # main(**kwargs)
         main()
     else: main()
