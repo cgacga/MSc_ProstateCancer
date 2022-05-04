@@ -59,38 +59,10 @@ def img_pltsave(data, savepath="", tensorboard=False):
                 axarr[i].imshow(data[i][j], cmap="gray")
                 axarr[i].axis("off")
     if savepath:       
-        # if tensorboard_epoch:
-
-        #     return figure
-            #writer.add_figure(savepath, fig, global_step=global_step)
-            
-            # print(f"saving image as ../models/{savepath}.png")
-            # plt.savefig(f"../models/{savepath}", format='png')
-            
-            #return figure
-
-
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png')
-            plt.clf()
-            buf.seek(0)
-            # Convert PNG buffer to TF image
-            image = tf.image.decode_png(buf.getvalue(), channels=4)
-            # Add the batch dimension
-            image = tf.expand_dims(image, 0)
-
-            #logdir = f"/bhome/cga2022/jobs/tb_logs/{savepath}"
-            logdir = os.path.abspath(savepath)
-            file_writer = tf.summary.create_file_writer(logdir)
-            with file_writer.as_default():
-                tf.summary.image(f"Visualize Images", image, step=tensorboard_epoch)
-
-        # else:
             print(f"saving image as {savepath}.png")
             plt.savefig(f"{savepath}.png", format='png')
             plt.clf()
     elif tensorboard:
-        
             buf = io.BytesIO()
             plt.savefig(buf, format='png')
             plt.clf()

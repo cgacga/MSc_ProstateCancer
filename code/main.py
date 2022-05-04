@@ -3,14 +3,12 @@
 import os, sys, time, random, gc
 import numpy as np
 import tensorflow as tf
-# from tensorflow.keras import backend as K
-
-
 
 from preprocess import *
 from data_augmentation import *
 from model_building import *
 from img_display import *
+from parameters import *
 
 ### GPU Cluster setup ###
 
@@ -69,13 +67,85 @@ set_seed(42)
 
 def main(**kwargs):
     start_time = time.time()
-    data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
     
-    tags = {"ADC": (32,128,96),"t2tsetra": None} 
-    #tags = {"t2tsetra": None} 
-    tags = {"ADC": (32,128,96)} 
+    try:
+        print(f"SLURM_ARRAY_TASK_ID - {os.environ['SLURM_ARRAY_TASK_ID']}")
+        from slurm_array import task_parameters
+        task_parameters()
+    except:
+        task_idx = os.environ['SLURM_JOB_ID']
+        epochs = 100
+        encoder_weights = "imagenet"
+        encoder_freeze = False
+        no_adjacent = False
+        
+        backbone_name = "resnet18"#"vgg16"#, "resnet18"]
+        activation = "sigmoid"#, "softmax"]
+        decoder_block_type = "upsampling"#, "transpose"]
+        learning_rate = 1e-6#1e-2#, 1e-4, 1e-6]
 
-    y_train, y_val, pat_df = preprocess(data_path,tags)
+        minmax_augmentation_percentage  = [15,16]
+        minmax_shape_reduction  = [6,7]
+        mask_vs_rotation_percentage = 100
+
+
+        job_name = f"{backbone_name}_{activation}_{decoder_block_type}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_{task_idx}"
+        #_{encoder_weights}_{encoder_freeze}
+
+
+        parameters.set_global(
+            data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
+            job_name = job_name,
+            backbone_name = backbone_name,
+            activation = activation,
+            encoder_weights = encoder_weights,
+            encoder_freeze = encoder_freeze,
+            decoder_block_type = decoder_block_type, 
+            epochs = epochs,
+            learning_rate  = learning_rate,
+            minmax_shape_reduction  = minmax_shape_reduction,
+            minmax_augmentation_percentage  = minmax_augmentation_percentage,
+            mask_vs_rotation_percentage = mask_vs_rotation_percentage,
+            no_adjacent = no_adjacent
+            )
+        parameters.add_modality(
+            modality_name = "ADC", 
+            batch_size=32, 
+            reshape_dim=(32,128,96))
+        parameters.add_modality(
+            modality_name = "t2tsetra", 
+            reshape_dim=None,  
+            batch_size=2)
+
+    y_train, y_val, pat_df = preprocess(parameters.data_path,parameters.tags)
+
+    models = {}
+    for modality_name in parameters.lst:
+        parameters.set_current(modality_name)
+        print(f"\nCurrent parameters:\n{modality.mrkdown()}")
+
+        trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
+
+        model = model_building(trainDS, valDS)
+        
+        models[modality_name] = model
+        del model, trainDS, valDS
+        tf.keras.backend.clear_session()
+        gc.collect()
+    
+    print("\n"+f"Job completed {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '*')+"\n")
+ 
+
+
+
+    
+    #data_path = "../data/manifest-A3Y4AE4o5818678569166032044/"
+    
+    #tags = {"ADC": (32,128,96),"t2tsetra": None} 
+    #tags = {"t2tsetra": None} 
+    #tags = {"ADC": (32,128,96)} 
+
+    #y_train, y_val, pat_df = preprocess(data_path,tags)
     # x_train, x_test, x_val, y_train, y_val, y_val = data_augmentation(pat_slices, pat_df)
 
     # x_train, _, _, x_train_noisy, _, _ = data_augmentation(pat_slices, pat_df)
@@ -84,20 +154,20 @@ def main(**kwargs):
 
 
     #batchsize = {"ADC": 32, "t2tsetra": 2}
-    batchsize = {"ADC": 32, "t2tsetra": 2}
+    #batchsize = {"ADC": 32, "t2tsetra": 2}
 
 
 
 
 
 
-    models = {}
-    for modality in tags.keys():
+    #models = {}
+    #for modality in tags.keys():
         # modelpath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}"
         #modelpath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}"
         #os.path.join(modelpath,f"multiple_05_{modality}"))
 
-        shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality, case=False)].values[0]
+#        shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality, case=False)].values[0]
         # train_data = tf.data.Dataset.from_tensor_slices((x_train_noisy[idx], x_train[idx]))
         # val_data = tf.data.Dataset.from_tensor_slices((x_test_noisy[idx], x_test[idx]))
         # models[modality] = model_building(shape, modelpath, train_data, val_data)
@@ -107,44 +177,49 @@ def main(**kwargs):
 
         
 
-        trainDS, valDS = augment_build_datasets(y_train[idx], y_val[idx], batchsize[modality])
+        # trainDS, valDS = augment_build_datasets(y_train[idx], y_val[idx], batchsize[modality])
 
-        model = model_building(shape, modality, trainDS, valDS)
+        # model = model_building(shape, modality, trainDS, valDS)
  
 
-        sample = y_val[idx][0:5] #0:1 
+        #sample = y_val[idx][0:5] #0:1 
 
-        aug_sample = augment_patches(sample)
+        #aug_sample = augment_patches(sample)
                         
-        gpus = tf.config.list_physical_devices('GPU')
-        strategy = tf.distribute.MirroredStrategy()
-        if len(gpus)>1:
-            with strategy.scope():
-                pred_sample = model.predict(tf.repeat(augment_patches(aug_sample),3,-1))
-        else: pred_sample = model.predict(tf.repeat(augment_patches(aug_sample),3,-1))
+        #gpus = tf.config.list_physical_devices('GPU')
+        #strategy = tf.distribute.MirroredStrategy()
+        #if len(gpus)>1:
+        #    with strategy.scope():
+        #        pred_sample = model.predict(tf.repeat(augment_patches(aug_sample),3,-1))
+        #else: pred_sample = model.predict(tf.repeat(augment_patches(aug_sample),3,-1))
         
-        img_stack = np.stack([aug_sample,pred_sample],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_sample.shape)))
+        #img_stack = np.stack([aug_sample,pred_sample],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_sample.shape)))
 
         #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_NAME']}_{modality}"
         # savepath = f"../models/{modality}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
 
         #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
 
-        savepath = f"{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
+        #savepath = f"{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
 
         
 
 
-        img_pltsave([img for img in img_stack],savepath)
+        #img_pltsave([img for img in img_stack],savepath)
         #os.path.join(modelpath,f"multiple_05_{modality}"))
 
         
-        models[modality] = model
-        del model
-        del trainDS
-        del valDS
-        tf.keras.backend.clear_session()
-        gc.collect()
+
+        # trainDS, valDS = augment_build_datasets(y_train[idx], y_val[idx], batchsize[modality])
+
+        # model = model_building(shape, modality, trainDS, valDS)
+
+        # models[modality] = model
+        # del model
+        # del trainDS
+        # del valDS
+        # tf.keras.backend.clear_session()
+        # gc.collect()
 
         # loss, acc = models[modality].evaluate(x_test_noisy[idx], x_test[idx], verbose=2)
         
@@ -155,7 +230,19 @@ def main(**kwargs):
         # print(f"Validation Loss {loss}\n Validation Acc {acc}")
         
     
+
+    #     trainDS, valDS = augment_build_datasets(y_train[idx], y_val[idx], batchsize[modality])
+
+    #     model = model_building(shape, modality, trainDS, valDS)
+        
+    #     models[modality] = model
+    #     del model
+    #     del trainDS
+    #     del valDS
+    #     tf.keras.backend.clear_session()
+    #     gc.collect()
     
+    # print("\n"+f"Job completed {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '*')+"\n")
 
     #test_result = t2_model.evaluate(x_test,y_val, verbose = 1)
     #print("Test accuracy :\t", round (test_result[1], 4))
@@ -174,20 +261,19 @@ def main(**kwargs):
 
     # predictions = t2_model.predict(x_val_noisy[1])
     # display([x_val_noisy[1], predictions])
-    print("\n"+f"Job completed {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '*')+"\n")
+    
     # keras.backend.clear_session()
-    return #pat_df, x_train, x_test, x_val, x_train_noisy, x_test_noisy
+    #return #pat_df, x_train, x_test, x_val, x_train_noisy, x_test_noisy
 
 
-# df, x_train, x_test, x_val, x_train_noisy, x_test_noisy = main()
 
 if __name__ == '__main__':
-    print()
     print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
     print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
-    print(f"tf version - {tf.__version__}")
-    print(f"N GPUs Available: {len(tf.config.list_physical_devices('GPU'))}") 
+    print(f"Tensorflow version - {tf.__version__}")
+    print(f"GPUs Available: {tf.config.list_physical_devices('GPU')}") 
     print()
+    
     
     if len(sys.argv)>1:
         print(sys.argv)

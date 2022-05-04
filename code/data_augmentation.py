@@ -2,11 +2,11 @@
 ### Data Augmentation ###
 
 import time
-import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from keras import layers
-
+from tensorflow.keras import layers
+from parameters import modality
+from model_building import PlotCallback
 
 
 def keras_augment(images,ksizes,depth,channels):
@@ -15,7 +15,7 @@ def keras_augment(images,ksizes,depth,channels):
 
     # images = tf.reshape(images, [-1, depth,ksize_height,ksize_width,channels])
 
-    data_augmentation = tf.keras.Sequential(
+    data_augmentation = keras.Sequential(
         [
             layers.Permute(dims=(2,3,1,4)),
             layers.Reshape((ksize_height,ksize_width,depth*channels)),
@@ -74,16 +74,16 @@ def augment_patches(patients):
     reconstructed_arr = reconstructed_arr.unstack(patients)
     slice = tf.zeros_like(patients[0])
     
-    no_adjacent = True
-    trials = 100
+    no_adjacent = modality.no_adjacent
+    trials = 100 if no_adjacent else 1
 
-    min_reduction = 5
-    max_reduction = 15
+    min_reduction = modality.minmax_shape_reduction[0]#5
+    max_reduction = modality.minmax_shape_reduction[1]#15
 
-    min_percentage = 10
-    max_percentage = 15
+    min_percentage = modality.minmax_augmentation_percentage[0]#10
+    max_percentage = modality.minmax_augmentation_percentage[1]#15
     
-    mask_percentage = 50
+    mask_percentage = modality.mask_vs_rotation_percentage#50
 
     for pat,patient in enumerate(patients):
         
@@ -113,7 +113,8 @@ def augment_patches(patients):
         left_border = tf.stack([(num_patches_y+1) * i for i in range(num_patches_x+1)])
         right_border = tf.stack([((num_patches_y+1) * i) - 1 for i in range(1,num_patches_x+2)])
         
-        if no_adjacent:
+        #if no_adjacent:
+        if True:
             for mmm in range(trials):
                 #idx_augmentations = np.random.choice(num_patches, size=n_augmentations, replace=False)
                 idx_augmentations = tf.math.top_k(tf.random.uniform(shape=[num_patches]), n_augmentations, sorted=False).indices
@@ -165,8 +166,7 @@ def augment_patches(patients):
                     #     break
                                     
                 if valid:
-                    break
-            #print("mmm ",mmm)      
+                    break 
             
         patches = tf.tensor_scatter_nd_update(patches, tf.expand_dims(idx_rotate, 1), keras_augment(tf.gather(patches, idx_rotate),ksizes,depth,channels))
         patches = tf.tensor_scatter_nd_update(patches, tf.expand_dims(idx_mask, 1), tf.zeros_like(tf.gather(patches, idx_mask)))
@@ -201,104 +201,64 @@ def augment_patches(patients):
     return reconstructed_arr
 
 
-def augment_build_datasets(y_train,y_val, batch_size):
+def augment_build_datasets(y_train,y_val):
 
     print(f"Augment and build dataset started".center(50, '_'))
     start_time = time.time()
 
-    train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
-    val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
+    #modality.steps_pr_epoch = len(y_train)//modality.batch_size_prgpu
+    #modality.validation_steps = len(y_val)//modality.batch_size_prgpu
+
+    #with modality.strategy.scope():
+    # train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
+    # val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
+    train_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_train),3,-1), y_train))
+    val_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_val),3,-1), y_val))
+
+    #PlotCallback.x_val = list(val_loader.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]
+    PlotCallback.x_val = list(val_loader.map(lambda x,y: x))[0:modality.tensorboard_num_predictimages]
     
-    #batch_size = 32
-
-    #32 -> 34147MiB / 40536MiB (2 gpu -> 16 each)
-    #16 ->  34147MiB / 40536MiB 
-    #8  -> 17819MiB / 40536MiB
-    print(f"Batch size = {batch_size}")
-
-
     trainDS = (
         train_loader
             .batch(
-                batch_size = batch_size
+                batch_size = modality.batch_size
                 ,num_parallel_calls=tf.data.AUTOTUNE)
-            .map(
-                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-                ,num_parallel_calls=tf.data.AUTOTUNE)
+            # .map(
+            #     lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+            #     ,num_parallel_calls=tf.data.AUTOTUNE)
             .prefetch(
                 buffer_size = tf.data.AUTOTUNE))
     valDS = (
         val_loader
             .batch(
-                batch_size = batch_size
+                batch_size = modality.batch_size
                 ,num_parallel_calls=tf.data.AUTOTUNE)
-            .map(
-                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-                ,num_parallel_calls=tf.data.AUTOTUNE)
+            # .map(
+            #     lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+            #     ,num_parallel_calls=tf.data.AUTOTUNE)
             .prefetch(
                 buffer_size = tf.data.AUTOTUNE))
 
-    gpus = tf.config.list_physical_devices('GPU')
-    strategy = tf.distribute.MirroredStrategy()
-    if len(gpus)>1:
-        trainDS = strategy.experimental_distribute_dataset(train_loader)
-        valDS = strategy.experimental_distribute_dataset(val_loader)
+    # gpus = tf.config.list_physical_devices('GPU')
+    # strategy = tf.distribute.MirroredStrategy()
+    # if len(gpus)>1:
+    #PlotCallback.x_val = list(valDS.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]#list(valDS.as_numpy_iterator())[0][0][0:modality.tensorboard_num_predictimages]
+
+    # if modality.n_gpus>1:
+    #     # Disable AutoShard.
+    #     options = tf.data.Options()
+    #     options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+        
+    #     trainDS = trainDS.with_options(options)
+    #     valDS = valDS.with_options(options)
+
+    #     trainDS = modality.strategy.experimental_distribute_dataset(trainDS)
+    #     valDS = modality.strategy.experimental_distribute_dataset(valDS)
+
 
 
     print("\n"+f"Augment and build finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
     return trainDS, valDS
 
-
-
-
-# def data_augmentation(pat_slices, pat_df):
-#     """
-#     This function takes in the patient slices and the patient dataframe and returns the train, test and
-#     validation data
-    
-#     :param pat_slices: The list of slices that we have extracted from the patients
-#     :param pat_df: The dataframe containing the patient id's of the slices
-#     :return: the training, test and validation data sets.
-#     """
-
-#     print(f"Data augmentation started".center(50, '_'))
-#     start_time = time.time()
-#     y_train, y_test, y_val  = train_test_validation(pat_slices, pat_df, 0.7,0.2,0.1)
-
-#     # Reduce footprint by overwriting the array
-#     pat_slices[:] = 0 #del pat_slices outside of function
-
-#     # x_train, x_test, x_val = augmentation([y_train, y_test, y_val],pat_df)
-
-#     # y_train, y_test, y_val  = image_to_np_reshape([y_train, y_test, y_val],pat_df)
-
-#     # x_train, x_test, x_val  = image_to_np_reshape([x_train, x_test, x_val],pat_df)
-
-
-#     #TODO: print the plots to check
-
-    
-    
-#     # x_train_noisy = noise(x_train)
-#     # x_test_noisy = noise(x_test)
-#     # x_val_noisy = noise(x_val)
-
-#     #TODO: patch pictures (try to do this onlie)
-#         # more than 3 patches at least (maybe use this as a variable?)
-#     #TODO: rotate patches
-
-    
-#     # x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([x_train, x_test, x_val, x_train_noisy, x_test_noisy, x_val_noisy])
-#     # x_train, x_test, x_val = expand_dims([x_train, x_test, x_val],dim=1)
-
-#     # x_train_noisy, x_test_noisy, x_val_noisy = expand_dims([ x_train_noisy, x_test_noisy, x_val_noisy],dim=1)
-
-#     print("\n"+f"Data augmentation {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
-
-#     #x_train = agumentated data
-#     #y_train = original data
-    
-
-#     return x_train, x_test, x_val, y_train, y_test, y_val
 

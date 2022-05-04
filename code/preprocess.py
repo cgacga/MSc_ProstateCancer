@@ -6,6 +6,7 @@ import pandas as pd
 import tensorflow as tf
 import SimpleITK as sitk
 from sklearn.model_selection import train_test_split
+from parameters import *
 
 def parse_csv(data_path,type_lst):
     """
@@ -73,7 +74,7 @@ def load_slices(data_path,tags, nslices=False):
     patients_df = parse_csv(data_path,tags)
 
     if nslices:
-        patients_df = patients_df[:20].reset_index()
+        patients_df = patients_df[:30].reset_index()
     
     # Assigning empty array with shape = (number of patients,number of modalities), in our case (346,2)
     patients_arr = np.empty(shape=(np.ceil(len(patients_df)/len(patients_df["tag"].unique())).astype(int),len(patients_df["tag"].unique())),dtype=object)
@@ -131,9 +132,9 @@ def getsize(patients_arr,patients_df, force_dim={}):
     resize_dim = resize_dim.count().groupby("tag").first().reset_index().rename(columns={"dim":"resize_dim"}).drop(columns=["idx"])
 
     # if the user wants to select their own dimension for all or just a specific modality
-    #force_dim = {modality.lower(): (dim if dim else (*resize_dim.resize_dim[resize_dim.tag.str.contains(modality, case=False)][0][:-1],32)) for modality, dim in force_dim.items() }
+    #force_dim = {modality_name.lower(): (dim if dim else (*resize_dim.resize_dim[resize_dim.tag.str.contains(modality_name, case=False)][0][:-1],32)) for modality_name, dim in force_dim.items() }
     
-    force_dim = {modality.lower(): (dim if dim else (32,*resize_dim.resize_dim[resize_dim.tag.str.contains(modality, case=False)].item()[1:])) for modality, dim in force_dim.items() }
+    force_dim = {modality_name.lower(): (dim if dim else (32,*resize_dim.resize_dim[resize_dim.tag.str.contains(modality_name, case=False)].item()[1:])) for modality_name, dim in force_dim.items() }
     if force_dim:
         resize_dim.loc[resize_dim.tag.str.lower().isin(force_dim.keys()), 'resize_dim'] = resize_dim.tag.str.lower().map(force_dim)
     patients_df = patients_df.merge(resize_dim, on="tag", how="left", suffixes=('', '_duplicate')).filter(regex='^(?!.*_duplicate)')
@@ -283,6 +284,7 @@ def train_test_validation(patients_arr, patients_df, ratio):
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
     print(f"|\t{len(x_train)}\t|\t{len(x_test)}\t|\t{len(x_val)}\t|")
 
+
     return x_train, x_test, x_val
 
 def train_val(patients_arr, patients_df, ratio):
@@ -313,6 +315,7 @@ def train_val(patients_arr, patients_df, ratio):
     print(f"\n|\tTrain\t|\tTest\t|")
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
     print(f"|\t{len(x_train)}\t|\t{len(x_val)}\t|")
+
 
     return x_train, x_val
 
@@ -399,6 +402,14 @@ def preprocess(data_path, tags, nslices = False):
     y_train, y_val  = train_val(pat_slices, pat_df, ratio=[0.7,0.3])
 
     y_train, y_val  = image_to_np_reshape([y_train, y_val],pat_df,channels=1)
+
+
+    for modality_name in parameters.lst:
+        shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
+        parameters.insert_param(modality_name,"image_shape",shape)
+        parameters.insert_param(modality_name,"idx",idx)
+    
+
 
     # y_train, y_val, y_test  = image_to_np_reshape([y_train, y_val, y_test],pat_df,channels=3)
 
