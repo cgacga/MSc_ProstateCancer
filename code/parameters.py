@@ -115,7 +115,7 @@ class parameters(object):
             _g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
             _g.optimizer.lr.assign(_g.learning_rate)
             _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{_g.dtime}/{modality_name}/")+"/"
-            _g.tensorboard_path = os.path.abspath(f"../tb_logs/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
+            _g.tensorboard_path = os.path.abspath(f"../tb/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
             parameters.lst[modality_name] = _g.__dict__
             parameters.tags[modality_name] = _g.reshape_dim
 

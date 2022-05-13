@@ -5,35 +5,29 @@ import time
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import segmentation_models_3D as sm
 from parameters import modality
 from model_building import PlotCallback
 
 
 def keras_augment(images,ksizes,depth,channels):
 
-    ksize_height, ksize_width = ksizes
-
-    # images = tf.reshape(images, [-1, depth,ksize_height,ksize_width,channels])
-
-    data_augmentation = keras.Sequential(
+    return keras.Sequential(
         [
             layers.Permute(dims=(2,3,1,4)),
-            layers.Reshape((ksize_height,ksize_width,depth*channels)),
+            layers.Reshape((ksizes[0],ksizes[1],depth*channels)),
 
             #layers.RandomFlip("horizontal_and_vertical"),
-            layers.RandomFlip("horizontal"),
-            layers.RandomRotation(factor=0.083334,fill_mode="constant",fill_value=0),
+            #layers.RandomFlip("horizontal"),
+            layers.RandomRotation(factor=0.08333,fill_mode="constant",fill_value=0),
             #2 * pi * (0.1 rad) = 36 deg
             #2 * pi * (0.08333(repeating ofc) rad) /approx 30 deg
             
-            layers.Reshape(target_shape=(ksize_height,ksize_width,depth,channels)),
+            layers.Reshape(target_shape=(ksizes[0],ksizes[1],depth,channels)),
             layers.Permute(dims=(3,1,2,4)),
         ],
         name="data_augmentation",
-    )
-    images = data_augmentation(images)
-
-    return images
+    )(images)
 
 
 
@@ -88,7 +82,10 @@ def augment_patches(patients):
     for pat,patient in enumerate(patients):
         
         #rnd_reduction = np.random.randint(min_reduction,max_reduction,size=2)
-        rnd_reduction = tf.random.uniform(shape=(2,), minval=min_reduction, maxval=max_reduction, dtype=tf.int32)
+        if min_reduction == max_reduction:
+            rnd_reduction = tf.stack([min_reduction,max_reduction])
+        else:
+            rnd_reduction = tf.random.uniform(shape=(2,), minval=min_reduction, maxval=max_reduction, dtype=tf.int32)
 
         patch_height = patients_shape[-3]//rnd_reduction[0]
         patch_width = patients_shape[-2]//rnd_reduction[1]
@@ -104,7 +101,10 @@ def augment_patches(patients):
         num_patches = tf.shape(patches)[0]
         
         #rnd_percentage = np.random.randint(min_percentage,max_percentage,size=1)
-        rnd_percentage = tf.random.uniform(shape=(), minval=min_percentage, maxval=max_percentage, dtype=tf.int32)
+        if min_percentage == max_percentage:
+            rnd_percentage = min_percentage
+        else:
+            rnd_percentage = tf.random.uniform(shape=(), minval=min_percentage, maxval=max_percentage, dtype=tf.int32)
 
         n_augmentations = num_patches*rnd_percentage//100
         
@@ -212,32 +212,56 @@ def augment_build_datasets(y_train,y_val):
     #with modality.strategy.scope():
     # train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
     # val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
-    train_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_train),3,-1), y_train))
-    val_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_val),3,-1), y_val))
+
+    #pre = sm.get_preprocessing(modality.backbone_name)
+    # y_train = pre(tf.repeat(y_train,3,-1))
+    # y_val = pre(tf.repeat(y_val,3,-1))
+
+    # y_train = tf.repeat(y_train,3,-1)
+    # y_val = tf.repeat(y_val,3,-1)
+
+    # train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
+    # val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
+    # yt = pre(tf.repeat(augment_patches(y_train),3,-1))
+    # train_loader = tf.data.Dataset.from_tensor_slices((yt, y_train))
+    # del yt
+    # yv  = pre(tf.repeat(augment_patches(y_val),3,-1))
+    # val_loader = tf.data.Dataset.from_tensor_slices((yv, y_val))
+    # del yv
+    # train_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_train),3,-1), y_train))
+    # val_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_val),3,-1), y_val))
+    train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
+    val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
 
     #PlotCallback.x_val = list(val_loader.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]
-    PlotCallback.x_val = list(val_loader.map(lambda x,y: x))[0:modality.tensorboard_num_predictimages]
+    #PlotCallback.x_val = list(val_loader.map(lambda x,y: tf.repeat(x,3,-1)))[0:modality.tensorboard_num_predictimages]
+    #PlotCallback.x_val = list(val_loader.map(lambda x,y: x))[0:modality.tensorboard_num_predictimages]
+    #PlotCallback.x_val = pre(tf.repeat(augment_patches(y_val[0:modality.tensorboard_num_predictimages]),3,-1))
+    PlotCallback.x_val = augment_patches(y_val[0:modality.tensorboard_num_predictimages])
+    #PlotCallback.x_val = list(val_loader.map(lambda x,y: pre(tf.repeat(augment_patches(x),3,-1))))[0:modality.tensorboard_num_predictimages]
     
     trainDS = (
         train_loader
             .batch(
                 batch_size = modality.batch_size
                 ,num_parallel_calls=tf.data.AUTOTUNE)
-            # .map(
-            #     lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-            #     ,num_parallel_calls=tf.data.AUTOTUNE)
+            .map(
+                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+                ,num_parallel_calls=tf.data.AUTOTUNE)
             .prefetch(
-                buffer_size = tf.data.AUTOTUNE))
+                buffer_size = tf.data.AUTOTUNE)
+                )
     valDS = (
         val_loader
             .batch(
                 batch_size = modality.batch_size
                 ,num_parallel_calls=tf.data.AUTOTUNE)
-            # .map(
-            #     lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-            #     ,num_parallel_calls=tf.data.AUTOTUNE)
+            .map(
+                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+                ,num_parallel_calls=tf.data.AUTOTUNE)
             .prefetch(
-                buffer_size = tf.data.AUTOTUNE))
+                buffer_size = tf.data.AUTOTUNE)
+                )
 
     # gpus = tf.config.list_physical_devices('GPU')
     # strategy = tf.distribute.MirroredStrategy()

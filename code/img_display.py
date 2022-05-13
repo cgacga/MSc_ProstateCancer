@@ -1,10 +1,26 @@
 
 ### Img display ###
 import os, io
+from matplotlib.cbook import to_filehandle
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 import tensorflow as tf
+
+def original_from_vgg16_preprocess(x):
+    mean = [103.939, 116.779, 123.68]
+    
+    if isinstance(x,tf.Tensor):
+        x = x.numpy()
+
+    # Zero-center by mean pixel
+    for i in range(x.shape[-1]):
+        x[..., i] += mean[i]
+    # 'BGR'->'RGB'
+    x = x[..., ::-1]
+    x += 128
+    x /= 255.
+    return x
 
 def img_pltsave(data, savepath="", tensorboard=False):
     """
@@ -15,6 +31,9 @@ def img_pltsave(data, savepath="", tensorboard=False):
     if not isinstance(data, list):
        data = [data]
     for i in range(len(data)):
+        #print(np.min(data[i]))
+        if np.min(data[i])<0:
+            data[i] = original_from_vgg16_preprocess(data[i])
         if len(data[i].shape)>4:
              data[i] = data[i][0]
         if len(data[i].shape)<4:
@@ -61,11 +80,11 @@ def img_pltsave(data, savepath="", tensorboard=False):
     if savepath:       
             print(f"saving image as {savepath}.png")
             plt.savefig(f"{savepath}.png", format='png')
-            plt.clf()
+            plt.close(figure)
     elif tensorboard:
             buf = io.BytesIO()
             plt.savefig(buf, format='png')
-            plt.clf()
+            plt.close(figure)
             buf.seek(0)
             # Convert PNG buffer to TF image
             image = tf.image.decode_png(buf.getvalue(), channels=4)
