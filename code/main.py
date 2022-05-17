@@ -77,8 +77,8 @@ def main(**kwargs):
         #sys.exit("Excepted SLURM_ARRAY_TASK_ID to be set.")
         #task_idx = os.environ['SLURM_JOB_ID']
             
-        #epochs = 500
-        epochs = 2
+        epochs = 500
+        batch_size = 1
         encoder_weights = "imagenet"
         encoder_freeze = True
         no_adjacent = False
@@ -94,7 +94,12 @@ def main(**kwargs):
         mask_vs_rotation_percentage = 100
     
 
-        job_name = f"{backbone_name}_{activation}_{decoder_block_type}_e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}"
+        encoder_method = "upsample"#"maxpool"
+        decoder_method = "maxpool"#"upsample"
+        center_filter = 1024
+        decoder_filters = (256, 128, 64, 32, 16)
+
+        job_name = f"{backbone_name}_{activation}_{decoder_block_type}_e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}"
         #_{encoder_weights}_
 
 
@@ -103,6 +108,7 @@ def main(**kwargs):
             job_name = job_name,
             backbone_name = backbone_name,
             activation = activation,
+            batch_size = batch_size,
             encoder_weights = encoder_weights,
             encoder_freeze = encoder_freeze,
             decoder_block_type = decoder_block_type, 
@@ -116,22 +122,20 @@ def main(**kwargs):
 
         parameters.add_modality(
             modality_name = "ADC", 
-            #reshape_dim=(32,128,96),
-            reshape_dim=(32,32,32),
+            reshape_dim=(32,128,96),
             #batch_size=32, 
             skip_modality=True
             )
         parameters.add_modality(
             modality_name = "t2tsetra", 
-            #reshape_dim=None,  
-            reshape_dim=(32,64,64),
+            reshape_dim=None,  
             #batch_size=2,
             skip_modality=True
             )
 
-        parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = "maxpool", decoder_method="upsample")
+        parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = encoder_method, decoder_method=decoder_method, center_filter=center_filter, decoder_filters=decoder_filters)
 
-    y_train, y_val, pat_df = preprocess(parameters,True)
+    y_train, y_val, pat_df = preprocess(parameters)
 
     models = {}
     # for modality_name in parameters.lst:
@@ -287,8 +291,8 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    # print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
-    # print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
+    print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
+    print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
     print(f"Tensorflow version - {tf.__version__}")
     print(f"GPUs Available: {tf.config.list_physical_devices('GPU')}") 
     print()

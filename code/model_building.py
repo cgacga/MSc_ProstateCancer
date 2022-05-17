@@ -121,8 +121,8 @@ class PlotCallback(tf.keras.callbacks.Callback):
                     for name in modality.merged_modalities:
                         if key.startswith(name):
                             tf.summary.scalar(f"{name}/{key[len(name)+1:]}",value,self.epoch)
-                        else:
-                            tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)
+                    if key.startswith("loss"):
+                        tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)
                     
                     #if key != "learning_rate":
                     #    tf.summary.scalar(f"{modality.modality_name}/train_{key}",value,self.epoch)#
@@ -135,8 +135,8 @@ class PlotCallback(tf.keras.callbacks.Callback):
                     for name in modality.merged_modalities:
                         if key.startswith(name):
                             tf.summary.scalar(f"{name}/{key[len(name)+1:]}",value,self.epoch)
-                        else:
-                            tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)#
+                    if key.startswith("loss"):
+                        tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)#
                     #key = key[4:]  # Remove 'val_' prefix.
                     #tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
                     #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
