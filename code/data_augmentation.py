@@ -2,11 +2,12 @@
 ### Data Augmentation ###
 
 import time
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import segmentation_models_3D as sm
-from parameters import modality
+from params import modality
 from model_building import PlotCallback
 
 
@@ -230,38 +231,73 @@ def augment_build_datasets(y_train,y_val):
     # del yv
     # train_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_train),3,-1), y_train))
     # val_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_val),3,-1), y_val))
-    train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
-    val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
+
+    if isinstance(y_train, np.ndarray):
+        
+        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
+
+        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
+
+        PlotCallback.x_val = [augment_patches(y[0:modality.tensorboard_num_predictimages]) for y in y_val]
+
+        trainDS = (
+            train_loader
+                .batch(
+                    batch_size = modality.batch_size
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
+                #.map(
+                    #lambda x, y: (tf.repeat(x,3,-1), y)
+                    #,num_parallel_calls=tf.data.AUTOTUNE)
+                .prefetch(
+                    buffer_size = tf.data.AUTOTUNE)
+                    )
+        valDS = (
+            val_loader
+                .batch(
+                    batch_size = modality.batch_size
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
+                # .map(
+                #     lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+                #     ,num_parallel_calls=tf.data.AUTOTUNE)
+                .prefetch(
+                    buffer_size = tf.data.AUTOTUNE)
+                    )
+
+    else:
+
+        train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
+        val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
+        PlotCallback.x_val = augment_patches(y_val[0:modality.tensorboard_num_predictimages])
 
     #PlotCallback.x_val = list(val_loader.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]
     #PlotCallback.x_val = list(val_loader.map(lambda x,y: tf.repeat(x,3,-1)))[0:modality.tensorboard_num_predictimages]
     #PlotCallback.x_val = list(val_loader.map(lambda x,y: x))[0:modality.tensorboard_num_predictimages]
     #PlotCallback.x_val = pre(tf.repeat(augment_patches(y_val[0:modality.tensorboard_num_predictimages]),3,-1))
-    PlotCallback.x_val = augment_patches(y_val[0:modality.tensorboard_num_predictimages])
-    #PlotCallback.x_val = list(val_loader.map(lambda x,y: pre(tf.repeat(augment_patches(x),3,-1))))[0:modality.tensorboard_num_predictimages]
     
-    trainDS = (
-        train_loader
-            .batch(
-                batch_size = modality.batch_size
-                ,num_parallel_calls=tf.data.AUTOTUNE)
-            .map(
-                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-                ,num_parallel_calls=tf.data.AUTOTUNE)
-            .prefetch(
-                buffer_size = tf.data.AUTOTUNE)
-                )
-    valDS = (
-        val_loader
-            .batch(
-                batch_size = modality.batch_size
-                ,num_parallel_calls=tf.data.AUTOTUNE)
-            .map(
-                lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-                ,num_parallel_calls=tf.data.AUTOTUNE)
-            .prefetch(
-                buffer_size = tf.data.AUTOTUNE)
-                )
+    #PlotCallback.x_val = list(val_loader.map(lambda x,y: pre(tf.repeat(augment_patches(x),3,-1))))[0:modality.tensorboard_num_predictimages]
+        
+        trainDS = (
+            train_loader
+                .batch(
+                    batch_size = modality.batch_size
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
+                .map(
+                    lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
+                .prefetch(
+                    buffer_size = tf.data.AUTOTUNE)
+                    )
+        valDS = (
+            val_loader
+                .batch(
+                    batch_size = modality.batch_size
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
+                .map(
+                    lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
+                .prefetch(
+                    buffer_size = tf.data.AUTOTUNE)
+                    )
 
     # gpus = tf.config.list_physical_devices('GPU')
     # strategy = tf.distribute.MirroredStrategy()

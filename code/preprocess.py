@@ -6,7 +6,7 @@ import pandas as pd
 import tensorflow as tf
 import SimpleITK as sitk
 from sklearn.model_selection import train_test_split
-from parameters import *
+
 
 def parse_csv(data_path,type_lst):
     """
@@ -375,7 +375,7 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
     return output
 
 
-def preprocess(data_path, tags, nslices = False):
+def preprocess(parameters, nslices = False):
     """
     Loads the slices from the data path, resamples the slices to the desired resolution, normalizes the
     slices and returns the resampled slices and the dataframe
@@ -396,9 +396,8 @@ def preprocess(data_path, tags, nslices = False):
     print(f"Preprocess started".center(50, '_'))
     start_time = time.time()
 
-    pat_slices, pat_df = load_slices(data_path, tags, nslices=nslices)
-
-    pat_slices, pat_df = resample_pat(pat_slices, pat_df, tags)
+    pat_slices, pat_df = load_slices(parameters.data_path, parameters.tags, nslices=nslices)
+    pat_slices, pat_df = resample_pat(pat_slices, pat_df, parameters.tags)
 
     pat_slices = normalize(pat_slices, pat_df)
 
@@ -408,10 +407,39 @@ def preprocess(data_path, tags, nslices = False):
     y_train, y_val  = image_to_np_reshape([y_train, y_val],pat_df,channels=1)
 
 
-    for modality_name in parameters.lst:
+    #shape_idx = {}
+    for modality_name in parameters.tags.keys():
         shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
         parameters.insert_param(modality_name,"image_shape",shape)
         parameters.insert_param(modality_name,"idx",idx)
+        #shape_idx[modality_name] = {"image_shape":shape, "idx":idx}
+    
+    for modality_name in parameters.lst.keys():
+        if modality_name.startswith("Merged"):
+            
+            # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst if not name.startswith("Merged")])
+            # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
+            # parameters.insert_param(modality_name,"idx",[parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])# if not name.startswith("Merged")])
+            # parameters.insert_param(modality_name,"image_shape",[shape_idx[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
+            # parameters.insert_param(modality_name,"idx",[shape_idx[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
+            
+            #print([tuple([shape_idx[name][ishape] for name in parameters.lst[modality_name]["merged_modalities"]]) for ishape in ["image_shape","tag_idx"]])
+            shape = tuple([parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
+            parameters.insert_param(modality_name,"image_shape",shape)
+            parameters.insert_param(modality_name,"same_shape",len(set(shape))==1.)
+            idx = tuple([parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
+            parameters.insert_param(modality_name,"idx",list(idx))
+
+            
+        
+
+    # [parameters.insert_param(modality_name,"image_shape",pat_df["dim"][pat_df.tag.str.contains(modality_name, case=False)].values[0])for modality_name in parameters.lst if not modality_name.startswith("Merged")]
+    # [parameters.insert_param(modality_name,"idx",pat_df["tag_idx"][pat_df.tag.str.contains(modality_name, case=False)].values[0]) for modality_name in parameters.lst if not modality_name.startswith("Merged")]
+
+    # [[parameters.insert_param(modality_name,ishape,pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]) for ishape in ["image_shape","idx"] ]for modality_name in parameters.lst if not modality_name.startswith("Merged")]
+
+
+    # [[parameters.insert_param(modality_name,ishape,pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0][i]) for i,ishape in enumerate(["image_shape","idx"]) ]for modality_name in parameters.lst if not modality_name.startswith("Merged")]
     
 
 

@@ -14,6 +14,6 @@ dependencies:
   - pip:
     - tensorflow==2.8.0
     - Keras-Applications==1.0.8
-    - efficientnet-3D==1.0.2
     - classification-models-3D==1.0.3
+    - efficientnet-3D==1.0.2
     - segmentation-models-3D==1.0.3

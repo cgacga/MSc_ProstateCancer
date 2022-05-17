@@ -1,4 +1,3 @@
-#%%
 ### Importing libraries ###
 import os, sys, time, random, gc
 import numpy as np
@@ -8,8 +7,8 @@ from preprocess import *
 from data_augmentation import *
 from model_building import *
 from img_display import *
-from parameters import *
 from slurm_array import task_parameters
+from params import *
 
 ### GPU Cluster setup ###
 
@@ -74,57 +73,74 @@ def main(**kwargs):
         
         task_parameters()
     except Exception as e:
-        print(e)
-        sys.exit("Excepted SLURM_ARRAY_TASK_ID to be set.")
-        # task_idx = os.environ['SLURM_JOB_ID']
-        # epochs = 100
-        # encoder_weights = "imagenet"
-        # encoder_freeze = False
-        # no_adjacent = False
-        
-        # backbone_name = "resnet18"#"vgg16"#, "resnet18"]
-        # activation = "sigmoid"#, "softmax"]
-        # decoder_block_type = "upsampling"#, "transpose"]
-        # learning_rate = 1e-6#1e-2#, 1e-4, 1e-6]
+        #print(e)
+        #sys.exit("Excepted SLURM_ARRAY_TASK_ID to be set.")
+        #task_idx = os.environ['SLURM_JOB_ID']
+            
+        #epochs = 500
+        epochs = 2
+        encoder_weights = "imagenet"
+        encoder_freeze = True
+        no_adjacent = False
+               
+        backbone_name = "vgg16"
+        activation = "sigmoid"
+        decoder_block_type = "upsampling"#["upsampling", "transpose"]
+        #learning_rate = [1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+        learning_rate = 1e-5
 
-        # minmax_augmentation_percentage  = [15,16]
-        # minmax_shape_reduction  = [6,7]
-        # mask_vs_rotation_percentage = 100
+        minmax_augmentation_percentage  = [60,60]
+        minmax_shape_reduction  = [15,15]
+        mask_vs_rotation_percentage = 100
+    
+
+        job_name = f"{backbone_name}_{activation}_{decoder_block_type}_e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}"
+        #_{encoder_weights}_
 
 
-        # job_name = f"{backbone_name}_{activation}_{decoder_block_type}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_{task_idx}"
-        # #_{encoder_weights}_{encoder_freeze}
+        parameters.set_global(
+            data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
+            job_name = job_name,
+            backbone_name = backbone_name,
+            activation = activation,
+            encoder_weights = encoder_weights,
+            encoder_freeze = encoder_freeze,
+            decoder_block_type = decoder_block_type, 
+            epochs = epochs,
+            learning_rate  = learning_rate,
+            minmax_shape_reduction  = minmax_shape_reduction,
+            minmax_augmentation_percentage  = minmax_augmentation_percentage,
+            mask_vs_rotation_percentage = mask_vs_rotation_percentage,
+            no_adjacent = no_adjacent
+            )
 
+        parameters.add_modality(
+            modality_name = "ADC", 
+            #reshape_dim=(32,128,96),
+            reshape_dim=(32,32,32),
+            #batch_size=32, 
+            skip_modality=True
+            )
+        parameters.add_modality(
+            modality_name = "t2tsetra", 
+            #reshape_dim=None,  
+            reshape_dim=(32,64,64),
+            #batch_size=2,
+            skip_modality=True
+            )
 
-        # parameters.set_global(
-        #     data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
-        #     job_name = job_name,
-        #     backbone_name = backbone_name,
-        #     activation = activation,
-        #     encoder_weights = encoder_weights,
-        #     encoder_freeze = encoder_freeze,
-        #     decoder_block_type = decoder_block_type, 
-        #     epochs = epochs,
-        #     learning_rate  = learning_rate,
-        #     minmax_shape_reduction  = minmax_shape_reduction,
-        #     minmax_augmentation_percentage  = minmax_augmentation_percentage,
-        #     mask_vs_rotation_percentage = mask_vs_rotation_percentage,
-        #     no_adjacent = no_adjacent
-        #     )
-        # parameters.add_modality(
-        #     modality_name = "ADC", 
-        #     batch_size=32, 
-        #     reshape_dim=(32,128,96))
-        # parameters.add_modality(
-        #     modality_name = "t2tsetra", 
-        #     reshape_dim=None,  
-        #     batch_size=2)
+        parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = "maxpool", decoder_method="upsample")
 
-    y_train, y_val, pat_df = preprocess(parameters.data_path,parameters.tags)
+    y_train, y_val, pat_df = preprocess(parameters,True)
 
     models = {}
-    for modality_name in parameters.lst:
+    # for modality_name in parameters.lst:
+    #     parameters.set_current(modality_name)
+
+    for modality_name in parameters.lst.keys():
         parameters.set_current(modality_name)
+        if modality.skip_modality:
+            continue
         print(f"\nCurrent parameters:\n{modality.mrkdown()}")
 
         trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
@@ -271,8 +287,8 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
-    print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
+    # print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
+    # print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
     print(f"Tensorflow version - {tf.__version__}")
     print(f"GPUs Available: {tf.config.list_physical_devices('GPU')}") 
     print()

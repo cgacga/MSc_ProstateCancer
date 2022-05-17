@@ -38,7 +38,7 @@ class parameters(object):
                 loss : str = "mse",
                 metrics : list[str] = ["mse", "mae"],
                 learning_rate : float = 1e-4,
-                no_adjacent : bool = True,
+                no_adjacent : bool = False,
                 minmax_shape_reduction : tuple = [5,15],
                 minmax_augmentation_percentage : tuple = [10,15],
                 mask_vs_rotation_percentage : int = 50):
@@ -83,6 +83,16 @@ class parameters(object):
         self.n_gpus = len(self.gpus) if self.gpus  else 0
         self.dtime = time.strftime("%y%m%d_%H%M%S", time.localtime())
         self.ctime = time.ctime()
+        self.skip_modality = False
+        self.merged = False
+        self.merged_modalities = tuple
+        self.same_shape = bool
+        self.tag_idx = int
+        #self.outputs = int
+        self.encoder_method = str
+        self.decoder_method = str
+        self.decoder_filters = tuple
+        self.center_filter = int
         self.tensorboard_num_predictimages = 5
         self.tensorboard_img_epoch = 10
         self.training_logs = {}
@@ -99,11 +109,14 @@ class parameters(object):
         _g = copy.deepcopy(parameters._g)
         #_g.strategy = parameters.strategy
         _g.modality_name = modality_name
-        _g.model_name = f"{_g.job_name}_{_g.modality_name}_{_g.dtime}"
+        _g.model_name = f"{_g.modality_name}_{_g.job_name}_{_g.dtime}"
         _g.reshape_dim = reshape_dim
+        #merged = False
         for key, value in kwargs.items():
             if key in _g.__dict__:
-                _g.__dict__[key] = value
+              #if key == "merged_modalities":
+                #merged = True
+              _g.__dict__[key] = value
             else:
                 #raise KeyError(f"{key} not a valid key, must be part of {_g.__dict__.keys()}")
                 raise KeyError(f"{key} not a valid key. Check the spelling, valid keynames are: {*_g.add_modality.__annotations__.keys(),*_g.set_global.__annotations__.keys()}")
@@ -115,15 +128,62 @@ class parameters(object):
             _g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
             _g.optimizer.lr.assign(_g.learning_rate)
             _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{_g.dtime}/{modality_name}/")+"/"
-            _g.tensorboard_path = os.path.abspath(f"../tb/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
+            #_g.tensorboard_path = os.path.abspath(f"../tb_logs/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
+            _g.tensorboard_path = os.path.abspath(f"../tb/{_g.job_name}/{modality_name}_{_g.dtime}")+"/"#/{modality_name}")+"/"
             parameters.lst[modality_name] = _g.__dict__
-            parameters.tags[modality_name] = _g.reshape_dim
+            #if not merged:
+            if not _g.merged:
+              parameters.tags[modality_name] = _g.reshape_dim
 
     def set_current(modality_name):
-        modality(parameters.lst[modality_name])
+        try:
+          modality(parameters.lst[modality_name])
+        except KeyError:
+          for key in parameters.lst.keys():
+            if (key.find(modality_name) != -1):
+              modality(parameters.lst[key])
+
+
     
     def insert_param(modality_name, key, value):
         parameters.lst[modality_name][key] = value
+
+    def join_modalities(modality_names: list, encoder_method = "maxpool",decoder_method = "upsample", decoder_filters = (256, 128, 64, 32, 16), center_filter = 1024):
+        up = ["upsample","transpose","padd"]
+        down = ["maxpool","avgpool","reshape", "crop"]
+        if len(decoder_filters) != 5:
+          raise ValueError("decoder_filters must be a list of 5 elements")
+        if encoder_method  not in (up+down):
+          raise ValueError(f"encoder_method: {encoder_method} must be one of {up+down}")
+        if decoder_method  not in (up+down):
+          raise ValueError(f"decoder_method: {decoder_method} must be one of {up+down}")
+        #_g = copy.deepcopy(parameters._g)
+        #modality_name = f"Merged_{'_'.join(modality_names)}_"
+        modality_name = f"Merged_{'-'.join(modality_names)}"
+        #_g.model_name = f"{_g.modality_name}_{_g.job_name}_{_g.dtime}"
+        reshape_dim = tuple([parameters.tags[modality_name] for modality_name in modality_names])
+
+        parameters.add_modality(modality_name, reshape_dim, merged_modalities = modality_names, encoder_method=encoder_method, decoder_method=decoder_method, decoder_filters=decoder_filters, center_filter=center_filter, merged=True)
+
+        # for modality_name in modality_names:
+        #     for key, value in parameters.lst[modality_name].items():
+        #         if key in _g.__dict__:
+        #             _g.__dict__[key] = value
+        #         else:
+        #             #raise KeyError(f"{key} not a valid key, must be part of {_g.__dict__.keys()}")
+        #             raise KeyError(f"{key} not a valid key. Check the spelling, valid keynames are: {*_g.add_modality.__annotations__.keys(),*_g.set_global.__annotations__.keys()}")
+        # missing = [key for key, x in _g.__dict__.items() if x == None and key != 'reshape_dim' and key != 'gpus']
+        # if missing:
+        #     raise KeyError(f"Missing value for: {missing}")
+        # else:
+        #     _g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
+        #     _g.optimizer.lr.assign(_g.learning_rate)
+        #     _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{_g.dtime}/{_g.modality_name}/")+"/"
+        #     _g.tensorboard_path = os.path.abspath(f"../tb_logs/{_g.job_name}/{_g.dtime}")+"/"#/{_g.modality_name}")+"/"
+        #     parameters.lst[_g.modality_name] = _g.__dict__
+        #     parameters.tags[_g.modality_name] = _g.reshape_dim
+
+
 
 
 def to_json(o, level=0):

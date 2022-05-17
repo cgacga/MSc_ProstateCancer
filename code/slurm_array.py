@@ -1,5 +1,5 @@
 import os, sys, itertools
-from parameters import parameters
+from params import parameters
 
 def task_parameters():
     task_idx = int(os.environ['SLURM_ARRAY_TASK_ID'])

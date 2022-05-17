@@ -6,11 +6,13 @@ from tensorflow import keras
 import segmentation_models_3D as sm
 sm.set_framework('tf.keras')
 from img_display import *
-from parameters import modality
+from params import modality
+from merged_model import get_merged_model
 
 
 class PlotCallback(tf.keras.callbacks.Callback):
     x_val = None
+
     def __init__(self):
         #self.x_val = PlotCallback.x_val#self.__class__.x_val
         #self.file_writer = tb_callback._val_writer
@@ -34,11 +36,15 @@ class PlotCallback(tf.keras.callbacks.Callback):
         self.train_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,"train"))
         self.val_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,"val"))
         #self.file_writer = self.val_writer
+
+
+
+        # if isinstance(self.__class__.x_val, list):
+        #     self.plotting = self.plot_merged_predictions
+        # else:
+        #     self.plotting = self.plot_predictions
         
-        
-                
     def plot_predictions(self):
-        #with modality.strategy.scope():
         
         #pred_sample = tf.repeat(self.model.predict(self.__class__.x_val),3,-1)
         
@@ -50,10 +56,29 @@ class PlotCallback(tf.keras.callbacks.Callback):
         img_stack = np.stack([self.__class__.x_val,pred_sample],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_sample.shape)))
 
         image = img_pltsave([img for img in img_stack],None,True)
-        #with modality.strategy.scope():
+        
         with self.val_writer.as_default():
             tf.summary.image(modality.job_name+f"_img/{self.savename}", image, step=self.epoch, description=modality.mrkdown())
             self.val_writer.flush()
+
+    def plot_merged_predictions(self):
+
+        pred_sample = [np.zeros_like(self.__class__.x_val[i]) for i in range(len(self.__class__.x_val))]
+
+        for i in range(modality.tensorboard_num_predictimages):
+            img = self.model.predict([tf.repeat(tf.expand_dims(xval[i],0),3,-1) for xval in self.__class__.x_val])
+            for j in range(len(img)):
+                pred_sample[j][i] = img[j]
+
+        for i, name in enumerate(modality.merged_modalities):        
+            
+            img_stack = np.stack([self.__class__.x_val[i],pred_sample[i]],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_sample[i].shape)))
+            
+            image = img_pltsave([img for img in img_stack],None,True)
+            with self.val_writer.as_default():
+                tf.summary.image(modality.job_name+f"_img/{name}_{self.savename}", image, step=self.epoch, description=modality.mrkdown())
+                self.val_writer.flush()
+
 
     def json_summary(self,logs):
         
@@ -62,11 +87,26 @@ class PlotCallback(tf.keras.callbacks.Callback):
         with self.val_writer.as_default():
             tf.summary.text(modality.job_name+f"_txt/{self.savename}", modality.mrkdown(), step=self.epoch, description=modality.model_name)
             self.val_writer.flush()
-        
-        
-    def on_epoch_end(self, epoch, logs={}):           
-        self.epoch = epoch+1     
-         
+
+    def summary(self,logs):
+        train_logs = {k: v for k, v in logs.items() if not k.startswith('val_')}
+        val_logs = {k: v for k, v in logs.items() if k.startswith('val_')}
+
+        if train_logs:
+            with self.train_writer.as_default():
+                for key, value in train_logs.items():
+                    tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
+                    
+                self.train_writer.flush()
+        if val_logs:
+            with self.val_writer.as_default():
+                for key, value in val_logs.items():
+
+                    tf.summary.scalar(f"{modality.modality_name}/{key[4:]}",value,self.epoch)#
+                    
+                self.val_writer.flush()
+
+    def summary_merged(self,logs):
         train_logs = {k: v for k, v in logs.items() if not k.startswith('val_')}
         val_logs = {k: v for k, v in logs.items() if k.startswith('val_')}
 
@@ -78,25 +118,87 @@ class PlotCallback(tf.keras.callbacks.Callback):
         if train_logs:
             with self.train_writer.as_default():
                 for key, value in train_logs.items():
-                    tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#, description=f"{key}_{modality.model_name}")
+                    for name in modality.merged_modalities:
+                        if key.startswith(name):
+                            tf.summary.scalar(f"{name}/{key[len(name)+1:]}",value,self.epoch)
+                        else:
+                            tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)
+                    
+                    #if key != "learning_rate":
+                    #    tf.summary.scalar(f"{modality.modality_name}/train_{key}",value,self.epoch)#
                     #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
                 self.train_writer.flush()
         if val_logs:
             with self.val_writer.as_default():
                 for key, value in val_logs.items():
-                    key = key[4:]  # Remove 'val_' prefix.
-                    tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#, description=f"{key}_{modality.model_name}") 
+                    key = key[4:]
+                    for name in modality.merged_modalities:
+                        if key.startswith(name):
+                            tf.summary.scalar(f"{name}/{key[len(name)+1:]}",value,self.epoch)
+                        else:
+                            tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)#
+                    #key = key[4:]  # Remove 'val_' prefix.
+                    #tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
                     #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
                 self.val_writer.flush()
+
         
-        if self.epoch%self.epoch_modulo==0:
-            self.plot_predictions()
+        
+    def on_epoch_end(self, epoch, logs={}):           
+        self.epoch = epoch+1     
+
+        #lr = tf.keras.backend.eval(self.model.optimizer.lr)
+        #logs.update({'learning_rate': lr})
+        
+        
+        # train_logs = {k: v for k, v in logs.items() if not k.startswith('val_')}
+        # val_logs = {k: v for k, v in logs.items() if k.startswith('val_')}
+
+        # # for key in logs:
+        # #     with self.file_writer.as_default():
+        # #         tf.summary.scalar(f"{modality.model_name}/{key}", logs[key], step=self.epoch, description=f"{key}_{modality.model_name}") 
+        # #         self.file_writer.flush()   
+
+        # if train_logs:
+        #     with self.train_writer.as_default():
+        #         for key, value in train_logs.items():
+        #             tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
+        #             #if key != "learning_rate":
+        #             #    tf.summary.scalar(f"{modality.modality_name}/train_{key}",value,self.epoch)#
+        #             #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
+        #         self.train_writer.flush()
+        # if val_logs:
+        #     with self.val_writer.as_default():
+        #         for key, value in val_logs.items():
+        #             tf.summary.scalar(f"{modality.modality_name}/{key[4:]}",value,self.epoch)#
+        #             #key = key[4:]  # Remove 'val_' prefix.
+        #             #tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
+        #             #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
+        #         self.val_writer.flush()
+        
+        #if self.epoch%self.epoch_modulo==0:
+            # if isinstance(self.__class__.x_val, list):
+            #     self.plot_merged_predictions()
+            # else:
+            #     self.plot_predictions()
+        if isinstance(self.__class__.x_val, list):
+            self.summary_merged(logs)
+            if self.epoch%self.epoch_modulo==0:
+                self.plot_merged_predictions()
+        else:
+            self.summary(logs)
+            if self.epoch%self.epoch_modulo==0:
+                self.plot_predictions()
+        
             
 
     def on_train_end(self, logs={}):
 
         if self.epoch%self.epoch_modulo!=0:
-            self.plot_predictions()
+            if isinstance(self.__class__.x_val, list):
+                self.plot_merged_predictions()
+            else:
+                self.plot_predictions()
         
         self.json_summary(logs)
 
@@ -192,7 +294,7 @@ def train_model(model, trainDS, valDS):
 
     return model
 
-def get_unet_model(input_shape, modality_name="autoencoder"):
+def get_unet_model(modality_name="autoencoder"):
 
     # shape = (width, height, depth, 1)
     print("\n"+f"{modality.model_name} - compile unet model".center(50, '.'))
@@ -200,14 +302,18 @@ def get_unet_model(input_shape, modality_name="autoencoder"):
 
     #TODO: sbatch variable for unet backbone
     #autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
-    autoencoder = sm.Unet(
-        backbone_name = modality.backbone_name, #"vgg16",
-        input_shape = (None,None,None,3),#modality.input_shape,
-        encoder_weights = modality.encoder_weights,# "imagenet",
-        classes = modality.classes,# 1,
-        encoder_freeze = modality.encoder_freeze,# False,
-        decoder_block_type = modality.decoder_block_type,# "transpose",
-        activation = modality.activation)# "sigmoid")
+
+    if modality.merged:
+        autoencoder = get_merged_model()
+    else:
+        autoencoder = sm.Unet(
+            backbone_name = modality.backbone_name, #"vgg16",
+            input_shape = (None,None,None,3),#modality.input_shape,
+            encoder_weights = modality.encoder_weights,# "imagenet",
+            classes = modality.classes,# 1,
+            encoder_freeze = modality.encoder_freeze,# False,
+            decoder_block_type = modality.decoder_block_type,# "transpose",
+            activation = modality.activation)# "sigmoid")
     #https://github.com/ZFTurbo/segmentation_models_3D/blob/master/segmentation_models_3D/models/unet.py#L166
 
     #TODO: sbatch variable for learning_rate
@@ -239,7 +345,7 @@ def get_unet_model(input_shape, modality_name="autoencoder"):
 
 
 
-def model_building(trainDS, valDS ):
+def model_building(trainDS, valDS):
     """
     Given a dataframe of patients, a modality (e.g. "ct"), and the corresponding x and y data, 
     this function returns a trained model for the modality
@@ -278,7 +384,10 @@ def model_building(trainDS, valDS ):
 
     #with modality.strategy.scope():
     #        model = get_unet_model(modality.image_shape,modality.modality_name)
-    model = get_unet_model(modality.image_shape,modality.modality_name)
+    
+    model = get_unet_model(modality.modality_name)
+
+
 
     #TODO: load selected weights from sbatch variable if exists
     
