@@ -94,12 +94,18 @@ def main(**kwargs):
         mask_vs_rotation_percentage = 100
     
 
+        #up = ["upsample","transpose","padd"]
+        #down = ["maxpool","avgpool","reshape", "crop"]
         encoder_method = "upsample"#"maxpool"
         decoder_method = "maxpool"#"upsample"
         center_filter = 1024
         decoder_filters = (256, 128, 64, 32, 16)
 
-        job_name = f"{backbone_name}_{activation}_{decoder_block_type}_e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}"
+
+        decode_try_upsample_first = True #False
+        encode_try_maxpool_first  = True #False
+
+        job_name = f"{backbone_name}_{activation}_{decoder_block_type}_e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}"
         #_{encoder_weights}_
 
 
@@ -128,12 +134,19 @@ def main(**kwargs):
             )
         parameters.add_modality(
             modality_name = "t2tsetra", 
-            reshape_dim=None,  
+            #reshape_dim=None,  
+            reshape_dim=(32,384,384),
             #batch_size=2,
             skip_modality=True
             )
 
-        parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = encoder_method, decoder_method=decoder_method, center_filter=center_filter, decoder_filters=decoder_filters)
+
+        parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = encoder_method, decoder_method=decoder_method, center_filter=center_filter, decoder_filters=decoder_filters, decode_try_upsample_first=decode_try_upsample_first,encode_try_maxpool_first=encode_try_maxpool_first)
+
+        parameters.set_current("Merged")
+        get_merged_model()
+        tf.keras.backend.clear_session()
+            
 
     y_train, y_val, pat_df = preprocess(parameters)
 

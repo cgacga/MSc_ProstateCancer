@@ -29,6 +29,10 @@ def parse_csv(data_path,type_lst):
         type_lst = type_lst.keys()
 
     df = pd.read_csv(os.path.normpath(data_path+"metadata.csv"))  
+    
+    findings = pd.read_csv(os.path.normpath(data_path+"ProstateX-Findings-Train.csv"))
+    findings = findings[["ProxID","ClinSig"]]
+    findings.rename(columns={'ProxID': 'Subject ID'}, inplace=True)
 
     # Removing subject which gives warning "Non uniform sampling or missing slices detected"
     df.drop(df.index[df["Subject ID"] == "ProstateX-0038"], inplace=True) 
@@ -36,6 +40,8 @@ def parse_csv(data_path,type_lst):
 
     # Selecting rows which contains the wanted modalities as well as selecting relevant columns
     df = df[df["Series Description"].str.contains("|".join(type_lst), case=False)][["Series UID","Subject ID","Series Description","Study Date","File Location"]]
+
+    df = df.merge(findings, how="left", on="Subject ID")
     
     # Creating a column to make it easier to identify the modality
     df["tag"] = df["Series Description"].str.extract(f"(?i)({'|'.join(type_lst)})", expand=False).fillna(df["Series Description"])

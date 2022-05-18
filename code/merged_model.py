@@ -4,6 +4,7 @@ from tensorflow.keras import Sequential, layers
 from tensorflow.keras.models import Model
 from params import modality
 import numpy as np
+import sys
 
 
 def rename_all_layers(model, suffix):
@@ -50,6 +51,7 @@ def upsizedown(models_dict, method, half = None):
             else:
                 p_tup = (p//2,p//2)
             pad_tup.append(p_tup)
+            #print(f"a-{a}, t-{t}, a//t-{max(a,t)//min(a,t)}, a/t-{max(a,t)/min(a,t)}")
             pool_tup.append(max(a,t)//min(a,t))
 
     mod = {}
@@ -85,8 +87,12 @@ def upsizedown(models_dict, method, half = None):
         #AveragePooling
         size_tuple(min_out)
         mod[max_out] = layers.AveragePooling3D(pool_size=pool_tup, strides = pool_tup,name=f'{max_out}_averagepooling')(models_dict[max_out])
-    
+
     return mod
+
+
+
+
 
 
 def DecoderUpsamplingX2Block(filters, stage, use_batchnorm=False):
@@ -98,17 +104,70 @@ def DecoderUpsamplingX2Block(filters, stage, use_batchnorm=False):
     #concat_axis = 4 if backend.image_data_format() == 'channels_last' else 1
     concat_axis = 4
 
-    def wrapper(input_tensor, skip=None):
+    def firstupsample(input_tensor,skip):
+        input_tensor = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
+        xskip_dict = {'x':input_tensor,'skip':skip}
+        mod = upsizedown(xskip_dict, modality.decoder_method)
+        x,skip = [(value if key not in mod.keys() else mod[key]) for key,value in xskip_dict.items()]
+        x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
+        return x
 
+    def noupsample(input_tensor,skip):
+        xskip_dict = {'x':input_tensor,'skip':skip}
+        mod = upsizedown(xskip_dict, modality.decoder_method)
+        x,skip = [(value if key not in mod.keys() else mod[key]) for key,value in xskip_dict.items()]
+        x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
+        return x
+
+    def wrapper(input_tensor, skip=None):
         if skip is not None:
             x_temp = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
-            if not np.array_equal(x_temp.shape[:-2] , skip.shape[:-2]):               
-                xskip_dict = {'x':input_tensor,'skip':skip}
-                mod = upsizedown(xskip_dict, modality.decoder_method)
-                x,skip = [(value if key not in mod.keys() else mod[key]) for key,value in xskip_dict.items()]
+            # print(x_temp.shape)
+            # print(x_temp.shape[:-1])
+            # print(x_temp.shape[:-2])
+            # print(skip.shape)
+            # print(skip.shape[:-1])
+            # print(skip.shape[:-2])
+            if not isinstance(skip, list) and not np.array_equal(x_temp.shape[:-1] , skip.shape[:-1]):
+                # xskip_dict = {'x':input_tensor,'skip':skip}
+                # mod = upsizedown(xskip_dict, modality.decoder_method)
+                
+                try:
+                    # xskip_dict = {'x':input_tensor,'skip':skip}
+                    # mod = upsizedown(xskip_dict, modality.decoder_method)
+
+                    # x,skip = [(value if key not in mod.keys() else mod[key]) for key,value in xskip_dict.items()]
+                    # x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
+                    if modality.decode_try_upsample_first:
+                        x = firstupsample(input_tensor,skip)
+                    else:
+                        x = noupsample(input_tensor,skip)
+                except ValueError as e:
+                    # input_tensor = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
+                    # xskip_dict = {'x':input_tensor,'skip':skip}
+                    # mod = upsizedown(xskip_dict, modality.decoder_method)
+                    # x,skip = [(value if key not in mod.keys() else mod[key]) for key,value in xskip_dict.items()]
+                    # x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
+
+                    print("Error: decode_try_upsample_first method not supported")
+                    #sys.exit(e)
+                    #raise ValueError("Error: decode_try_upsample_first method not supported")
+
+                    
+                    
+                    # if modality.decode_try_upsample_first:
+                    #     x = noupsample(input_tensor,skip)
+                    # else:
+                    #     x = firstupsample(input_tensor,skip)
+                        
+
             else:
                 x = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
-            x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
+                if isinstance(skip, list):
+                    x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, *skip])
+                else:
+                    x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
+
         else:
             x = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
         x = sm.models.unet.Conv3x3BnReLU(filters, use_batchnorm, name=conv1_name)(x)
@@ -128,10 +187,8 @@ def DecoderTransposeX2Block(filters, stage, use_batchnorm=False):
     concat_axis = bn_axis = 4 
 
     def layer(input_tensor, skip=None):
-
-        x_temp = layers.UpSampling3D(size=2, name=transp_name)(input_tensor)
-
         if skip is not None:
+            x_temp = layers.UpSampling3D(size=2, name=transp_name)(input_tensor)
             if not np.array_equal(x_temp.shape[:-2] , skip.shape[:-2]):
                 xskip_dict = {'x':input_tensor,'skip':skip}
                 mod = upsizedown(xskip_dict, modality.decoder_method)
@@ -201,7 +258,9 @@ def build_merged_unet(
 
     for i in range(n_upsample_blocks):
         if modality.same_shape:
-            skip = layers.Concatenate(axis=-1)([skips[i*2],skips[(i*2)+1]]) if i < len(skips)/2 else None
+        #if False:
+            #skip = layers.Concatenate(axis=-1)([skips[i*2],skips[(i*2)+1]]) if i < len(skips)/2 else None
+            skip = [skips[i*2],skips[(i*2)+1]] if i < len(skips)/2 else None
             x = decoder_block(decoder_filters[i], stage=i, use_batchnorm=use_batchnorm)(x, skip)
         else:
             a,t = (a,t) if i != 0 else (x,x)
@@ -225,7 +284,7 @@ def build_merged_unet(
         x = layers.SpatialDropout3D(dropout, name='pyramid_dropout')(x)
 
 
-    def final(x, name_suffix=""):
+    def final_conv(x, name_suffix=""):
         x = layers.Conv3D(
             filters=classes,
             kernel_size=(3, 3, 3),
@@ -235,18 +294,27 @@ def build_merged_unet(
             name=f'final_conv_{name_suffix}',
         )(x)
         #x = layers.Activation(activation, name=f"{activation}_{name_suffix}")(x)
+        #x = layers.Activation(activation, name=f"{name_suffix}")(x)
+        return x
+    def activation_final(x, name_suffix=""):
         x = layers.Activation(activation, name=f"{name_suffix}")(x)
         return x
 
     if modality.same_shape:
-        x = final(x, name_suffix="")
+    #if False:
+        x = final_conv(x, name_suffix="SameShape")
         if modality.classes > 1:
-            model = Model(input_, [layers.Lambda(tf.unstack, arguments=dict(axis=-1))(x)])
+            model = Model(input_, activation_final(x, name_suffix=modality.activation))
+            #x = activation_final(x, name_suffix=modality.activation)
+            #model = Model(input_, [layers.Lambda(tf.unstack, arguments=dict(axis=-1))(x)])
         else:
-            model = Model(input_, x)
+            model = Model(input_, [activation_final(x, name_suffix=f"{name}") for name in modality.merged_modalities])
+            #model = Model(input_, x)
     else:
-        a = final(a, name_suffix=f"{modality.merged_modalities[0]}")
-        t = final(t, name_suffix=f"{modality.merged_modalities[1]}")
+        a = final_conv(a, name_suffix=f"{modality.merged_modalities[0]}")
+        a = activation_final(a, name_suffix=f"{modality.merged_modalities[0]}")
+        t = final_conv(t, name_suffix=f"{modality.merged_modalities[1]}")
+        t = activation_final(t, name_suffix=f"{modality.merged_modalities[1]}")
         model = Model(input_, [a,t])
         
     return model
@@ -258,7 +326,13 @@ def get_merged_model():
     for i,modality_name in enumerate(modality.merged_modalities):
 
         #dims = parameters.lst[modality_name]["image_shape"]
-        dims = modality.image_shape[i]
+        # #dims = modality.image_shape[i]
+        # print(modality.image_shape[i])
+        # print(isinstance(modality.image_shape[i], tuple))
+        # print(modality.reshape_dim[i])
+        # print(isinstance(modality.reshape_dim[i], tuple))
+        # dims = modality.reshape_dim[i] if modality.reshape_dim[i] != None else modality.image_shape[i]
+        dims = modality.image_shape[i] if isinstance(modality.image_shape[i], tuple) else modality.reshape_dim[i]
             
         model = sm.Unet(modality.backbone_name, input_shape=(dims[0],dims[1],dims[2],3), encoder_weights=modality.encoder_weights, encoder_freeze = modality.encoder_freeze)
         
@@ -269,18 +343,52 @@ def get_merged_model():
 
     if modality.same_shape:
         concat = layers.Concatenate(axis=-1)([encoders[key].output for key in encoders.keys()])
+        concat = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(concat)
     else:
         out_sum = {key: sum(value.output.shape[1:-1]) for key,value in encoders.items()}
         max_out, min_out = [m(out_sum, key = out_sum.get) for m in [max,min]]
         if modality.encoder_method in ["upsample", "transpose", "padd"]:
             enc = max_out
         else: enc = min_out
+
+    
+    def firstmaxpool(encoders):
         x = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(encoders[enc].output)
-        encoders[enc] = Model(encoders[enc].input, x)
+        #encoders[enc] = Model(encoders[enc].input, x)
+        enc_copy =encoders.copy()
+        enc_copy[enc] = Model(enc_copy[enc].input, x)
 
+        mod = upsizedown(enc_copy, modality.encoder_method)
+
+        concat = layers.Concatenate(axis=-1)([(enc_copy[key].output if key not in mod.keys() else mod[key]) for key in enc_copy.keys()])
+        encoders = enc_copy.copy()
+        return concat
+
+    def fistconcat(encoders):
         mod = upsizedown(encoders, modality.encoder_method)
-
         concat = layers.Concatenate(axis=-1)([(encoders[key].output if key not in mod.keys() else mod[key]) for key in encoders.keys()])
+        concat = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(concat)
+        return concat
+
+    try:
+        
+        if modality.encode_try_maxpool_first:
+            concat = firstmaxpool(encoders)
+        else: concat = fistconcat(encoders)
+    except ValueError as e:
+        print("Error: encode_try_maxpool_first method not supported")
+        #sys.exit(e)
+        #raise ValueError("Error: encode_try_maxpool_first method not supported")
+        
+
+        # if modality.decode_try_maxpool_first:
+        #     concat = fistconcat(encoders)
+        # else: concat = firstmaxpool(encoders)
+        
+        #encoders[enc] = Model(encoders[enc].input, x)
+
+
+
 
     model = Model(inputs=[enc.input for enc in encoders.values()], outputs=[concat],name="concat_model")
 

@@ -86,6 +86,8 @@ class parameters(object):
         self.skip_modality = False
         self.merged = False
         self.merged_modalities = tuple
+        self.decode_try_upsample_first = bool
+        self.encode_try_maxpool_first = bool
         self.same_shape = bool
         self.tag_idx = int
         #self.outputs = int
@@ -148,7 +150,7 @@ class parameters(object):
     def insert_param(modality_name, key, value):
         parameters.lst[modality_name][key] = value
 
-    def join_modalities(modality_names: list, encoder_method = "maxpool",decoder_method = "upsample", decoder_filters = (256, 128, 64, 32, 16), center_filter = 1024):
+    def join_modalities(modality_names: list, encoder_method = "maxpool",decoder_method = "upsample", decoder_filters = (256, 128, 64, 32, 16), center_filter = 1024, decode_try_upsample_first = True, encode_try_maxpool_first = True):
         up = ["upsample","transpose","padd"]
         down = ["maxpool","avgpool","reshape", "crop"]
         if len(decoder_filters) != 5:
@@ -163,7 +165,7 @@ class parameters(object):
         #_g.model_name = f"{_g.modality_name}_{_g.job_name}_{_g.dtime}"
         reshape_dim = tuple([parameters.tags[modality_name] for modality_name in modality_names])
 
-        parameters.add_modality(modality_name, reshape_dim, merged_modalities = modality_names, encoder_method=encoder_method, decoder_method=decoder_method, decoder_filters=decoder_filters, center_filter=center_filter, merged=True)
+        parameters.add_modality(modality_name, reshape_dim, merged_modalities = modality_names, encoder_method=encoder_method, decoder_method=decoder_method, decoder_filters=decoder_filters, center_filter=center_filter, merged=True, decode_try_upsample_first = decode_try_upsample_first, encode_try_maxpool_first = encode_try_maxpool_first,same_shape=False)
 
         # for modality_name in modality_names:
         #     for key, value in parameters.lst[modality_name].items():
