@@ -80,18 +80,18 @@ def main(**kwargs):
         epochs = 500
         batch_size = 1
         encoder_weights = "imagenet"
-        encoder_freeze = True
+        encoder_freeze = False
         no_adjacent = False
                
         backbone_name = "vgg16"
         activation = "sigmoid"
         decoder_block_type = "upsampling"#["upsampling", "transpose"]
         #learning_rate = [1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
-        learning_rate = 1e-5
+        learning_rate = 1e-4
 
-        minmax_augmentation_percentage  = [60,60]
-        minmax_shape_reduction  = [15,15]
-        mask_vs_rotation_percentage = 100
+        minmax_augmentation_percentage  = [40,60]#[60,60]
+        minmax_shape_reduction  = [10,20]#[15,15]
+        mask_vs_rotation_percentage = 50#100
     
 
         #up = ["upsample","transpose","padd"]
@@ -105,7 +105,7 @@ def main(**kwargs):
         decode_try_upsample_first = True #False
         encode_try_maxpool_first  = True #False
 
-        job_name = f"{backbone_name}_{activation}_{decoder_block_type}_e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}"
+        job_name = f"NOTnormalized_{backbone_name}_{activation}_{decoder_block_type}_e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}"
         #_{encoder_weights}_
 
 
@@ -129,23 +129,23 @@ def main(**kwargs):
         parameters.add_modality(
             modality_name = "ADC", 
             reshape_dim=(32,128,96),
-            #batch_size=32, 
-            skip_modality=True
+            batch_size=32, 
+            skip_modality=False
             )
-        parameters.add_modality(
-            modality_name = "t2tsetra", 
-            #reshape_dim=None,  
-            reshape_dim=(32,384,384),
-            #batch_size=2,
-            skip_modality=True
-            )
+        # parameters.add_modality(
+        #     modality_name = "t2tsetra", 
+        #     #reshape_dim=None,  
+        #     reshape_dim=(32,384,384),
+        #     batch_size=2,
+        #     skip_modality=False
+        #     )
 
 
-        parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = encoder_method, decoder_method=decoder_method, center_filter=center_filter, decoder_filters=decoder_filters, decode_try_upsample_first=decode_try_upsample_first,encode_try_maxpool_first=encode_try_maxpool_first)
+        # parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = encoder_method, decoder_method=decoder_method, center_filter=center_filter, decoder_filters=decoder_filters, decode_try_upsample_first=decode_try_upsample_first,encode_try_maxpool_first=encode_try_maxpool_first)
 
-        parameters.set_current("Merged")
-        get_merged_model()
-        tf.keras.backend.clear_session()
+        # parameters.set_current("Merged")
+        # get_merged_model()
+        # tf.keras.backend.clear_session()
             
 
     y_train, y_val, pat_df = preprocess(parameters)

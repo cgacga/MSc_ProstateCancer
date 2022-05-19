@@ -18,9 +18,9 @@ def original_from_vgg16_preprocess(x):
         x[..., i] += mean[i]
     # 'BGR'->'RGB'
     x = x[..., ::-1]
-    x += 128
-    x /= 255.
-    return x
+    #x += 128
+    #x /= 255.
+    return x.astype(np.float64)/255.
 
 def img_pltsave(data, savepath="", tensorboard=False):
     """
@@ -32,7 +32,7 @@ def img_pltsave(data, savepath="", tensorboard=False):
        data = [data]
     for i in range(len(data)):
         #print(np.min(data[i]))
-        if np.min(data[i])<0:
+        if np.min(data[i])<0 or np.max(data[i])>1:
             data[i] = original_from_vgg16_preprocess(data[i])
         if len(data[i].shape)>4:
              data[i] = data[i][0]

@@ -240,8 +240,6 @@ def normalize(patients_arr,patients_df):
     normalization_filter = sitk.IntensityWindowingImageFilter()        
     normalization_filter.SetOutputMaximum(1.0)
     normalization_filter.SetOutputMinimum(0.0)
-    #normalization_filter.SetOutputMaximum(127)
-    #normalization_filter.SetOutputMinimum(-128)
     #normalization_filter.SetOutputMaximum(255)
     #normalization_filter.SetOutputMinimum(0)
     if (t2_upper_perc and t2_lower_perc):

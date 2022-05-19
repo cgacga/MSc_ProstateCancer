@@ -7,7 +7,7 @@ def task_parameters():
 
     epochs = 500
     encoder_weights = "imagenet"
-    encoder_freeze = True
+    encoder_freeze = False
     no_adjacent = False
     
     
@@ -15,7 +15,7 @@ def task_parameters():
     backbone_name = "vgg16"#["vgg16", "resnet18"]
     activation = "sigmoid"#["sigmoid", "softmax"]
     decoder_block_type = "upsampling"#["upsampling", "transpose"]
-    learning_rate = [1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+    learning_rate = [1e-3, 1e-4, 1e-5, 1e-6]
     #learning_rate = [1e-3,1e-4,1e-5]
 
     #encoder_freeze = [True, False]

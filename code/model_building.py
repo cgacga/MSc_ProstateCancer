@@ -52,6 +52,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
         for i,xval in enumerate(self.__class__.x_val):
             #pred_sample = tf.concat([pred_sample,tf.repeat(self.model.predict(xval),3,-1)],0)
             pred_sample[i] = self.model.predict(tf.repeat(tf.expand_dims(xval,0),3,-1))
+            #pred_sample[i] = tf.repeat(self.model.predict(tf.expand_dims(xval,0)),3,-1)
         
         img_stack = np.stack([self.__class__.x_val,pred_sample],0+1).reshape(*(-(0==j) or s for j,s in enumerate(pred_sample.shape)))
 
