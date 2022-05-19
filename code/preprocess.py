@@ -33,7 +33,11 @@ def parse_csv(data_path,type_lst):
     findings = pd.read_csv(os.path.normpath(data_path+"ProstateX-Findings-Train.csv"))
     findings = findings[["ProxID","ClinSig"]]
     findings.rename(columns={'ProxID': 'Subject ID'}, inplace=True)
-
+    findings = findings.sort_values("ClinSig")[::-1].drop_duplicates(['Subject ID'], keep='first')
+    findings = findings.sort_values("Subject ID").reset_index(drop=True)
+    findings["ClinSig"].mask(findings["ClinSig"], "significant", inplace=True)
+    findings["ClinSig"].mask(findings["ClinSig"] == False, "non-significant", inplace=True)
+    
     # Removing subject which gives warning "Non uniform sampling or missing slices detected"
     df.drop(df.index[df["Subject ID"] == "ProstateX-0038"], inplace=True) 
 
@@ -274,6 +278,8 @@ def train_test_validation(patients_arr, patients_df, ratio):
     :param validation_ratio: Ratio of training data
     :return: training, test and validation sets.
     """
+    patients_df=patients_df[~patients_df['ClinSig'].isna()].copy()
+    patients_arr = patients_arr[patients_df.idx.apply(lambda x: x[0]).unique()]
 
     print(f"\n{'Splitting'.center(50, '.')}")
     train_ratio,test_ratio,validation_ratio = ratio
@@ -292,8 +298,10 @@ def train_test_validation(patients_arr, patients_df, ratio):
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
     print(f"|\t{len(x_train)}\t|\t{len(x_test)}\t|\t{len(x_val)}\t|")
 
+    print(f'\nTotal - {[f"{k}:{v}" for k,v in patients_df.ClinSig.value_counts().items()]}')
+    [print(f'{df} - {[f"{k}:{v} - ({(v/patients_df.ClinSig.value_counts()[k])*100:.0f}%)" for k,v in patients_df[patients_df.split == df].ClinSig.value_counts().items()]}') for df in ["train_df","test_df","val_df"]][0]
 
-    return x_train, x_test, x_val
+    return x_train, x_test, x_val, patients_df
 
 def train_val(patients_arr, patients_df, ratio):
     """
@@ -325,7 +333,7 @@ def train_val(patients_arr, patients_df, ratio):
     print(f"|\t{len(x_train)}\t|\t{len(x_val)}\t|")
 
 
-    return x_train, x_val
+    return x_train, x_val, patients_df
 
 
 def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
@@ -376,7 +384,7 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
 
     print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
 
-    return output
+    return [*output, patients_df]
 
 
 def preprocess(parameters, nslices = False):
@@ -405,10 +413,11 @@ def preprocess(parameters, nslices = False):
 
     pat_slices = normalize(pat_slices, pat_df)
 
-    # y_train, y_test, y_val  = train_test_validation(pat_slices, pat_df, ratio=[0.7,0.2,0.1])
-    y_train, y_val  = train_val(pat_slices, pat_df, ratio=[0.7,0.3])
+    #y_train, y_test, y_val, pat_df  = train_test_validation(pat_slices, pat_df, ratio=[0.7,0.2,0.1])
+    #y_train, y_test, y_val, pat_df  = image_to_np_reshape([y_train, y_test, y_val],pat_df,channels=1)
 
-    y_train, y_val  = image_to_np_reshape([y_train, y_val],pat_df,channels=1)
+    y_train, y_val, pat_df = train_val(pat_slices, pat_df, ratio=[0.7,0.3])
+    y_train, y_val, pat_df  = image_to_np_reshape([y_train, y_val],pat_df,channels=1)
 
 
     #shape_idx = {}

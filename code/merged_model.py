@@ -370,14 +370,14 @@ def get_merged_model():
         concat = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(concat)
         return concat
 
-    try:
-        
-        if modality.encode_try_maxpool_first:
-            concat = firstmaxpool(encoders)
-        else: concat = fistconcat(encoders)
-    except ValueError as e:
-        print("Error: encode_try_maxpool_first method not supported")
-        #sys.exit(e)
+    if not modality.same_shape:
+        try:
+            if modality.encode_try_maxpool_first:
+                concat = firstmaxpool(encoders)
+            else: concat = fistconcat(encoders)
+        except ValueError as e:
+            print("Error: encode_try_maxpool_first method not supported")
+            #sys.exit(e)
         #raise ValueError("Error: encode_try_maxpool_first method not supported")
         
 

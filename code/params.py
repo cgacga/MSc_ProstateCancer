@@ -29,7 +29,7 @@ class parameters(object):
                 classes : int = 1,
                 activation : str = "sigmoid",
                 encoder_weights : str = "imagenet",
-                encoder_freeze : bool = True,
+                encoder_freeze : bool = False,
                 decoder_block_type : str = "upsampling", #transpose
                 epochs : int = 100,
                 #batch_size_prgpu : int = 2,
@@ -129,9 +129,9 @@ class parameters(object):
         else:
             _g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
             _g.optimizer.lr.assign(_g.learning_rate)
-            _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{_g.dtime}/{modality_name}/")+"/"
+            _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{modality_name}/")+"/"
             #_g.tensorboard_path = os.path.abspath(f"../tb_logs/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
-            _g.tensorboard_path = os.path.abspath(f"../tb/{_g.job_name}/{modality_name}_{_g.dtime}")+"/"#/{modality_name}")+"/"
+            _g.tensorboard_path = os.path.abspath(f"../tensorboard/{_g.job_name}/{modality_name}_{_g.dtime}")+"/"#/{modality_name}")+"/"
             parameters.lst[modality_name] = _g.__dict__
             #if not merged:
             if not _g.merged:
