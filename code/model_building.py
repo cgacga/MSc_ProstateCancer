@@ -307,14 +307,27 @@ def get_unet_model(modality_name="autoencoder"):
     if modality.merged:
         autoencoder = get_merged_model()
     else:
+        dims = modality.image_shape if isinstance(modality.image_shape, tuple) else modality.reshape_dim
         autoencoder = sm.Unet(
             backbone_name = modality.backbone_name, #"vgg16",
-            input_shape = (None,None,None,3),#modality.input_shape,
+            input_shape = (dims[0],dims[1],dims[2],3),#(None,None,None,3),#modality.input_shape,
             encoder_weights = modality.encoder_weights,# "imagenet",
             classes = modality.classes,# 1,
             encoder_freeze = modality.encoder_freeze,# False,
             decoder_block_type = modality.decoder_block_type,# "transpose",
             activation = modality.activation)# "sigmoid")
+
+        if not os.path.exists(modality.model_path):
+            os.makedirs(modality.model_path)
+
+
+        tf.keras.utils.plot_model(
+            autoencoder,
+            show_shapes=True,
+            show_layer_activations = True,
+            expand_nested=True,
+            to_file=os.path.abspath(modality.model_path+f"autoencoder.png")
+            )
     #https://github.com/ZFTurbo/segmentation_models_3D/blob/master/segmentation_models_3D/models/unet.py#L166
 
     #TODO: sbatch variable for learning_rate
@@ -395,24 +408,26 @@ def model_building(trainDS, valDS):
     #model = train_model(model,x_data[idx], y_data[idx])
     #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}"
     #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/"
-    save_path = os.path.join(modality.model_path,modality.model_name)
+    #save_path = os.path.join(modality.model_path,modality.model_name)
     #with modality.strategy.scope():
-    if os.path.isdir(modality.model_path): 
-        #if len(gpus)>1:
-        #    with strategy.scope():
-                # model.load_weights(os.path.join(savepath,"weights"))    
-                #model.load_weights(os.path.join(savepath,modality)) #savepath)
-        #        model.load_weights(save_path)
-        #        print("Loaded Weights")
-        #else: #model.load_weights(os.path.join(savepath,modality)) 
-        #    model.load_weights(save_path)       
-        #with modality.strategy.scope:
-        model.load_weights(save_path)
-        print("Loaded Weights")
-    else: 
-        model = train_model(model, trainDS, valDS)
-        model.save(save_path)   
+    # if os.path.isdir(modality.model_path): 
+    #     #if len(gpus)>1:
+    #     #    with strategy.scope():
+    #             # model.load_weights(os.path.join(savepath,"weights"))    
+    #             #model.load_weights(os.path.join(savepath,modality)) #savepath)
+    #     #        model.load_weights(save_path)
+    #     #        print("Loaded Weights")
+    #     #else: #model.load_weights(os.path.join(savepath,modality)) 
+    #     #    model.load_weights(save_path)       
+    #     #with modality.strategy.scope:
+    #     model.load_weights(save_path)
+    #     print("Loaded Weights")
+    # else: 
+    #     model = train_model(model, trainDS, valDS)
+        #model.save(save_path)   
         #model.save_weights(os.path.join(savepath,modality))
+
+    model = train_model(model, trainDS, valDS)
 
     #TODO: save images from recreation, with noisy and clean included (use more than 5 images in the plot)
         

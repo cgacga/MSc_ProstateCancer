@@ -11,7 +11,7 @@ def single_run(index):
     encoder_freeze = False
     activation = "sigmoid"
     decoder_block_type = "upsampling"
-    encoder_freeze = True
+    encoder_freeze = False
 
     modality_name = ["ADC","t2tsetra"]       
     learning_rate = [1e-3, 1e-4]
@@ -62,26 +62,31 @@ def single_run(index):
         print(f"Task: {index}/{len(iterate)-1}")
 
     
-    parameters.set_current(modality_name)
+    #parameters.set_current(modality_name)
 
-    model = get_merged_model()
+    ####model = get_merged_model()
+    #model = sm.Unet(modality.backbone_name, dim osv osv osv)
 
-    tf.keras.utils.plot_model(
-    model,
-    show_shapes=True,
-    show_layer_activations = True,
-    expand_nested=True,
-    to_file=os.path.abspath(modality.model_path+f"autoencoder.png")
-    )
 
-    tf.keras.backend.clear_session()
+    # if not os.path.exists(modality.model_path):
+    #     os.makedirs(modality.model_path)
+
+    # tf.keras.utils.plot_model(
+    # model,
+    # show_shapes=True,
+    # show_layer_activations = True,
+    # expand_nested=True,
+    # to_file=os.path.abspath(modality.model_path+f"autoencoder.png")
+    # )
+
+    #tf.keras.backend.clear_session()
 
 
 def merged_run(index):
 
     epochs = 350
     batch_size = 1
-    encoder_freeze = True
+    encoder_freeze = False
     decoder_block_type = "upsampling"
 
     learning_rate = [1e-3, 1e-4]
@@ -89,7 +94,10 @@ def merged_run(index):
 
     updowm = [["maxpool","upsample",False,True],["upsample","maxpool",False,True]]#,["maxpool","upsample",True,True]]
 
-    filters = [[512,(256, 128, 64, 32, 16)],[1024,(1024, 512, 256, 128, 64)],[256,(256, 128, 64, 32, 16)]]#,[512,(512,256, 128, 64, 32)]
+    # rm /e350_lr0.001_sr15-15_ap60-60_mvsrp100_efFalse_bs1_emupsample_dmmaxpool_cf1024_df1024-64_etmfFalse_dtufTrue/Merged_ADC-t2tsetra/
+    # rm /e350_lr0.001_sr15-15_ap60-60_mvsrp100_efFalse_bs1_emmaxpool_dmupsample_cf1024_df1024-64_etmfFalse_dtufTrue/Merged_ADC-t2tsetra/
+    # test 128 istedenfor 1024
+    filters = [[512,(256, 128, 64, 32, 16)],[1024,(512, 256, 128, 64, 32)],[256,(256, 128, 64, 32, 16)]]#,[512,(512,256, 128, 64, 32)]
 
     iterate = list(itertools.product(
                             cube,
@@ -118,7 +126,8 @@ def merged_run(index):
                 learning_rate  = learning_rate,
                 minmax_shape_reduction  = minmax_shape_reduction,
                 minmax_augmentation_percentage  = minmax_augmentation_percentage,
-                mask_vs_rotation_percentage = mask_vs_rotation_percentage
+                mask_vs_rotation_percentage = mask_vs_rotation_percentage,
+                batch_size = batch_size
                 )
 
 
@@ -145,6 +154,9 @@ def merged_run(index):
     parameters.set_current("Merged")
     
     model = get_merged_model()
+
+    if not os.path.exists(modality.model_path):
+        os.makedirs(modality.model_path)
 
     tf.keras.utils.plot_model(
     model,
@@ -237,6 +249,11 @@ def samesize_run(index):
     parameters.set_current("Merged")
     
     model = get_merged_model()
+
+
+    if not os.path.exists(modality.model_path):
+        os.makedirs(modality.model_path)
+
 
     tf.keras.utils.plot_model(
     model,

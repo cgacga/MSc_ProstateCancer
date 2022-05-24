@@ -336,7 +336,7 @@ def train_val(patients_arr, patients_df, ratio):
     return x_train, x_val, patients_df
 
 
-def image_to_np_reshape(train_test_val_split,patients_df,channels=3):
+def image_to_np_reshape(train_test_val_split,patients_df,channels=1):
     """
     Convert the sitk image to np.array and reshape it to (num_of_slices, height, width, channels)
     

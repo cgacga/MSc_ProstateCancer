@@ -25,7 +25,7 @@ def keras_augment(images,ksizes,depth,channels):
             #2 * pi * (0.1 rad) = 36 deg
             #2 * pi * (0.08333(repeating ofc) rad) /approx 30 deg
             
-            layers.Reshape(target_shape=(ksizes[0],ksizes[1],depth,channels)),
+            layers.Reshape((ksizes[0],ksizes[1],depth,channels)),
             layers.Permute(dims=(3,1,2,4)),
         ],
         name="data_augmentation",
@@ -58,8 +58,10 @@ class Patches(layers.Layer):
 
 def augment_patches(patients):
     set_seed(42)
-    if len(patients.shape) < 5:
-        patients = tf.expand_dims(patients, axis=0)
+    #print("augment")
+    #print(patients.shape)
+    #if len(patients.shape) < 5:
+    #    patients = tf.expand_dims(patients, axis=0)
     patients_shape = tf.shape(patients)
     depth = patients_shape[1]
     channels = patients_shape[-1]
@@ -200,7 +202,11 @@ def augment_patches(patients):
     reconstructed_arr = reconstructed_arr.stack()
             
             # reconstructed_arr[pat,:,x_pos:x_pos + step_x, y_pos:y_pos + step_y,:] = patch
-    set_seed(42)
+    #print(reconstructed_arr.shape)
+    # if (reconstructed_arr.shape[-1] == 1):
+    #     reconstructed_arr = tf.repeat(reconstructed_arr,3,-1)
+    # print(reconstructed_arr.shape)
+    
     return reconstructed_arr
 
 
@@ -234,22 +240,54 @@ def augment_build_datasets(y_train,y_val):
     # train_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_train),3,-1), y_train))
     # val_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_val),3,-1), y_val))
 
+
     if isinstance(y_train, np.ndarray):
         
-        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
+        # train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
 
-        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
+        # val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
+
+
+        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
+
+        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
+
+        # tl_x = {}
+        # tl_y = {}
+        # for i,y in enumerate(y_train):
+        #     tl_x[f"input_{i+1}_{modality.merged_modalities[i]}"] = augment_patches(y)
+        #     tl_y[f"{modality.merged_modalities[i]}"] = y
+
+        # train_loader = tf.data.Dataset.from_tensor_slices((tl_x,tl_y))
+        # del tl_x,tl_y
+
+
+        # vl_x = {}
+        # vl_y = {}
+        # for i,y in enumerate(y_val):
+        #     vl_x[f"input_{i+1}_{modality.merged_modalities[i]}"] = augment_patches(y)
+        #     vl_y[f"{modality.merged_modalities[i]}"] = y
+
+        # val_loader = tf.data.Dataset.from_tensor_slices((vl_x,vl_y))
+        # del vl_x,vl_y
 
         PlotCallback.x_val = [augment_patches(y[0:modality.tensorboard_num_predictimages]) for y in y_val]
+
+        def repeatfn(x,y):
+            return (({key:tf.repeat(val,3,-1) for key,val in x.items()},y))
+
 
         trainDS = (
             train_loader
                 .batch(
                     batch_size = modality.batch_size
                     ,num_parallel_calls=tf.data.AUTOTUNE)
-                #.map(
+                .map(
                     #lambda x, y: (tf.repeat(x,3,-1), y)
-                    #,num_parallel_calls=tf.data.AUTOTUNE)
+                    #lambda x,y: ({key:tf.repeat(val,3,-1) for key,val in x.items()},y)
+                    #lambda x,y:({key:tf.repeat(val,3,-1) for key,val in x.items()},{key:val for key,val in y.items()})
+                    repeatfn
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
                 .prefetch(
                     buffer_size = tf.data.AUTOTUNE)
                     )
@@ -258,9 +296,11 @@ def augment_build_datasets(y_train,y_val):
                 .batch(
                     batch_size = modality.batch_size
                     ,num_parallel_calls=tf.data.AUTOTUNE)
-                # .map(
-                #     lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-                #     ,num_parallel_calls=tf.data.AUTOTUNE)
+                .map(
+                    #lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
+                    #lambda x,y: (({key:tf.repeat(val,3,-1) for key,val in x.items()},{key:val for key,val in y.items()}))
+                    repeatfn
+                    ,num_parallel_calls=tf.data.AUTOTUNE)
                 .prefetch(
                     buffer_size = tf.data.AUTOTUNE)
                     )
@@ -282,12 +322,12 @@ def augment_build_datasets(y_train,y_val):
         # val_loader = tf.data.Dataset.from_tensor_slices((pre(tf.repeat(augment_patches(y_val),3,-1)), y_val))
         # PlotCallback.x_val = pre(tf.repeat(augment_patches(y_val[0:modality.tensorboard_num_predictimages]),3,-1))
 
-    #PlotCallback.x_val = list(val_loader.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]
-    #PlotCallback.x_val = list(val_loader.map(lambda x,y: tf.repeat(x,3,-1)))[0:modality.tensorboard_num_predictimages]
-    #PlotCallback.x_val = list(val_loader.map(lambda x,y: x))[0:modality.tensorboard_num_predictimages]
-    #PlotCallback.x_val = pre(tf.repeat(augment_patches(y_val[0:modality.tensorboard_num_predictimages]),3,-1))
-    
-    #PlotCallback.x_val = list(val_loader.map(lambda x,y: pre(tf.repeat(augment_patches(x),3,-1))))[0:modality.tensorboard_num_predictimages]
+        #PlotCallback.x_val = list(val_loader.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]
+        #PlotCallback.x_val = list(val_loader.map(lambda x,y: tf.repeat(x,3,-1)))[0:modality.tensorboard_num_predictimages]
+        #PlotCallback.x_val = list(val_loader.map(lambda x,y: x))[0:modality.tensorboard_num_predictimages]
+        #PlotCallback.x_val = pre(tf.repeat(augment_patches(y_val[0:modality.tensorboard_num_predictimages]),3,-1))
+        
+        #PlotCallback.x_val = list(val_loader.map(lambda x,y: pre(tf.repeat(augment_patches(x),3,-1))))[0:modality.tensorboard_num_predictimages]
     
         
         trainDS = (

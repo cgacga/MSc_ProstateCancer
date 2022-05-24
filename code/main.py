@@ -1,8 +1,8 @@
 ### Importing libraries ###
 import os, sys, time, random, gc
-from tensorflow.keras.models import Model
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.models import Model
 
 from preprocess import *
 from data_augmentation import *
@@ -70,13 +70,19 @@ set_seed(42)
 def main(*args, **kwargs):
     start_time = time.time()
     
-    
-    if slurm_array == "single":
-        single_run(index)
-    elif slurm_array == "merged":
-        merged_run(index)
-    elif slurm_array == "samesize":
-        samesize_run(index)
+    if "slurm_array" in kwargs:
+        slurm_array = kwargs["slurm_array"]
+    #if "index" in kwargs:
+        index = int(kwargs["index"])
+
+        if slurm_array == "single":
+            single_run(index)
+        elif slurm_array == "merged":
+            merged_run(index)
+        elif slurm_array == "samesize":
+            samesize_run(index)
+    else:
+        raise ValueError("Missing slurm_array in kwargs")
 
 
 
@@ -163,42 +169,42 @@ def main(*args, **kwargs):
             
     y_train, y_val, pat_df = preprocess(parameters)
     
-    if os.path.isdir(modality.model_path):
-        print("Loading model")
-        encoder = tf.keras.models.load_model(modality.model_path)
-    else:
+    # if os.path.isdir(modality.model_path):
+    #     print("Loading model")
+    #     encoder = tf.keras.models.load_model(modality.model_path)
+    # else:
 
 
     #models = {}
     # for modality_name in parameters.lst:
     #     parameters.set_current(modality_name)
 
-        for modality_name in parameters.lst.keys():
-            parameters.set_current(modality_name)
-            if modality.skip_modality:
-                continue
-            print(f"\nCurrent parameters:\n{modality.mrkdown()}")
+    for modality_name in parameters.lst.keys():
+        parameters.set_current(modality_name)
+        if modality.skip_modality:
+            continue
+        print(f"\nCurrent parameters:\n{modality.mrkdown()}")
 
-            trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
+        trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
 
-            autoencoder = model_building(trainDS, valDS)
+        autoencoder = model_building(trainDS, valDS)
 
-            encoder = Model(autoencoder.input, autoencoder.get_layer("center_block2_relu").output,name=f'encoder_{modality.modality_name}')
-            encoder.save(modality.model_path)
+        encoder = Model(autoencoder.input, autoencoder.get_layer("center_block2_relu").output,name=f'encoder_{modality.modality_name}')
 
+        encoder.save(modality.model_path)
 
-            tf.keras.utils.plot_model(
-            encoder,
-            show_shapes=True,
-            show_layer_activations = True,
-            expand_nested=True,
-            to_file=os.path.abspath(modality.model_path+f"encoder.png")
-            )
-            
-            #models[modality_name] = autoencoder
-            del autoencoder, encoder, trainDS, valDS
-            tf.keras.backend.clear_session()
-            gc.collect()
+        tf.keras.utils.plot_model(
+        encoder,
+        show_shapes=True,
+        show_layer_activations = True,
+        expand_nested=True,
+        to_file=os.path.abspath(modality.model_path+f"encoder.png")
+        )
+        
+        #models[modality_name] = autoencoder
+        del autoencoder, encoder, trainDS, valDS
+        tf.keras.backend.clear_session()
+        gc.collect()
     
     print("\n"+f"Job completed {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '*')+"\n")
  
@@ -335,23 +341,26 @@ def main(*args, **kwargs):
 
 
 if __name__ == '__main__':
-    print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
-    print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
+    try:
+        print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
+        print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
+    except:
+        pass
     print(f"Tensorflow version - {tf.__version__}")
     print(f"GPUs Available: {tf.config.list_physical_devices('GPU')}") 
     print()
     
     
     if len(sys.argv)>1:
-        print(sys.argv)
+        #print(sys.argv)
         #kwargs={kw[0]:kw[1] for kw in [ar.split('=') for ar in sys.argv if ar.find('=')>0]}
         #import json
         #kwargs=json.loads(sys.argv[1])
-        print(f"kwargs = {kwargs}")
         args = [x for x in sys.argv if '=' not in x]
         kwargs = {x.split('=')[0]: x.split('=')[1] for x in sys.argv if '=' in x}        
         #print Func(*args, **kwargs)  
 
+        #print(f"kwargs = {kwargs}")
 
         # main(**kwargs)
         main(*args, **kwargs)
