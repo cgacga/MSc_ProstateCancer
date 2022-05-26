@@ -292,16 +292,17 @@ def train_test_validation(patients_arr, patients_df, ratio):
     # splitting the data into training, test and validation sets
     #x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=(1-test_ratio), random_state=42, shuffle=True)
 
-    x_train, x_test, train_df, test_df = train_test_split(patients_arr , pat_index, train_size=(1-test_ratio), random_state=42, shuffle=True)
+    x_train, x_val, train_df, val_df = train_test_split(patients_arr , pat_index, train_size=(1-test_ratio), random_state=42, shuffle=True)
     
-    x_train, x_val, train_df, val_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio))
+    x_train, x_test, train_df, test_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio))
 
     # Update the dataframe with the new indexes
     df_idx = np.concatenate([train_df, test_df, val_df])
     split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df,val_df]])
     split_names = np.concatenate([["y_train"]*len(train_df), ["y_test"]*len(test_df), ["y_val"]*len(val_df)])
-    patients_df[["split","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
     
+    patients_df[["split","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
+
     n_removed = len(pat_index)-len(old_pat_index)#len(patients_df.idx.apply(lambda x: x[0]))
     if n_removed:
         print(f"\nRemoved {n_removed} patients without labels")
@@ -310,11 +311,11 @@ def train_test_validation(patients_arr, patients_df, ratio):
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|")
     print(f"|\t{len(x_train)}\t|\t{len(x_val)}\t|\t{len(x_test)}\t|")
 
-    print(f'\nTotal - {[f"{k}:{v}" for k,v in patients_df.drop_duplicates("Subject ID").ClinSig.value_counts().items()]}')
-    subjectid = "Subject ID"
+    subjectid = ["Subject ID", "Study Date"]
+    print(f'\nTotal - {[f"{k}:{v}" for k,v in patients_df.drop_duplicates(subjectid).ClinSig.value_counts().items()]}')
+    
     [print(f'{df} - {[f"{k}:{v} - ({(v/patients_df.drop_duplicates(subjectid).ClinSig.value_counts()[k])*100:.0f}%)" for k,v in patients_df[patients_df.split == df].drop_duplicates(subjectid).ClinSig.value_counts().items()]}') for df in ["y_train","y_val","y_test"]][0]
     
-
     return x_train, x_test, x_val, patients_df
 
 def train_val(patients_arr, patients_df, ratio):

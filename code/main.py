@@ -276,7 +276,7 @@ def main(*args, **kwargs):
     #else:
         #y_train, y_val, pat_df = preprocess(parameters)
         #y_train, y_val, pat_df = preprocess(pat_slices, pat_df, autoencoder = True)
-    pat_slices, pat_df = preprocess(parameters,True)
+    pat_slices, pat_df = preprocess(parameters)
 
     #print(len(pat_slices[:,0]))
     #pd.DataFrame.to_csv(pat_df, f"asdqwe_førsplit.csv")
@@ -326,10 +326,24 @@ def main(*args, **kwargs):
 
             labels = {}
             for split in pat_df.split.unique():
+
                 
-                label_split = pat_df.sort_values("pat_idx").drop_duplicates("Subject ID").ClinSig.where(pat_df.split == split).dropna().replace({"non-significant": 0, "significant": 1})
+                label_split = pat_df.sort_values("pat_idx").drop_duplicates(["Subject ID", "Study Date"]).ClinSig.where(pat_df.split == split).dropna().replace({"non-significant": 0, "significant": 1})
+                #label_split = pat_df.sort_values("pat_idx").drop_duplicates("Subject ID").ClinSig.where(pat_df.split == split).replace({"non-significant": 0, "significant": 1})
 
                 labels[split] = tf.constant(label_split, dtype=tf.int32)
+
+
+            
+        # #print(pat_df.ClinSig)
+        #     print(asd)
+        #     print()
+        #     pandas.DataFrame.to_csv(asd[i], f"asdqwe{i}.csv")
+
+
+            print("y_test",y_test[modality.idx].shape)
+            print("labels y_test",len(labels["y_test"]))
+
 
             classifier = build_train_classifier(encoder, y_train[modality.idx], y_val[modality.idx], labels)
 

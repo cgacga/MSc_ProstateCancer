@@ -39,6 +39,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
         self.job_name = modality.job_name
         self.description = modality.mrkdown()
         self.model_name = modality.model_name
+        self.modality_name = modality.modality_name
 
         #logdir = os.path.abspath(self.savepath) #opp ^ (fra params)
         
@@ -507,6 +508,7 @@ def build_train_classifier(encoder, y_train, y_val, labels):
         to_file=os.path.abspath(modality.model_path+f"{modality.modeltype}.png")
         )
 
+
     if isinstance(y_train, np.ndarray):
         train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)},labels["y_train"]))
         val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)},labels["y_val"]))
@@ -588,9 +590,13 @@ def evaluate_classifier(classifier, y_test, labels):
 
     for i in range(1,n_iterations+1):
         #a = np.random.randint(1,20000)
-        test = [resample(y,n_samples= n_size, replace = True,stratify = labels, random_state = i) for y in y_test]
+        if isinstance(y_test, np.ndarray):
+            test = [resample(y.numpy(),n_samples= n_size, replace = True,stratify = labels, random_state = i) for y in y_test]
+        else:
+            test = resample(y_test.numpy(),n_samples= n_size, replace = True,stratify = labels, random_state = i)
+            
         
-        labels_test = resample(labels,n_samples = n_size, replace = True,stratify = labels, random_state = i)
+        labels_test = resample(labels.numpy(),n_samples = n_size, replace = True,stratify = labels, random_state = i)
 
         results = evaluate_model.evaluate(test,labels_test,batch_size = modality.classifier_test_batchsize)
 
