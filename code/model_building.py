@@ -568,7 +568,7 @@ def evaluate_classifier(classifier, y_test, labels):
             tfa.metrics.F1Score(num_classes=2, average=None),
             tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")]
 
-    evaluate_model = classifier.compile(opt, loss=loss, metrics=metrics)
+    classifier.compile(opt, loss=loss, metrics=metrics,name=f'{modality.modeltype}_{modality.modality_name}')
 
 
     auc_l = list()
@@ -580,10 +580,6 @@ def evaluate_classifier(classifier, y_test, labels):
     #    n_size = int(y_test.shape[0])
     n_size = len(labels)
     n_iterations = modality.classifier_test_Nbootstrap
-
-    print(f"nsize same ?  {int(y_test.shape[0]) == len(labels)}")
-    print(f"len(labels) =  {len(labels)}")
-    print(f"y_test shape =  {int(y_test.shape[0])}")
 
 
     test_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{modality.modeltype}_test"))
@@ -598,7 +594,7 @@ def evaluate_classifier(classifier, y_test, labels):
         
         labels_test = resample(labels.numpy(),n_samples = n_size, replace = True,stratify = labels, random_state = i)
 
-        results = evaluate_model.evaluate(test,labels_test,batch_size = modality.classifier_test_batchsize)
+        results = classifier.evaluate(test,labels_test,batch_size = modality.classifier_test_batchsize)
 
         auc_l.append(results[-1])
 
