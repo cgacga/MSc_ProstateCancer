@@ -565,10 +565,10 @@ def evaluate_classifier(classifier, y_test, labels):
             tf.keras.metrics.BinaryAccuracy(name="accuracy"),
             tf.keras.metrics.Precision(name="precision"),
             tf.keras.metrics.Recall(name="recall"),
-            tfa.metrics.F1Score(num_classes=2, average=None),
+            tfa.metrics.F1Score(num_classes=1, average=None),
             tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")]
 
-    classifier.compile(opt, loss=loss, metrics=metrics,name=f'{modality.modeltype}_{modality.modality_name}')
+    classifier.compile(opt, loss=loss, metrics=metrics)
 
 
     auc_l = list()
@@ -580,6 +580,10 @@ def evaluate_classifier(classifier, y_test, labels):
     #    n_size = int(y_test.shape[0])
     n_size = len(labels)
     n_iterations = modality.classifier_test_Nbootstrap
+
+    # print(y_test.shape)
+    # print(len(labels))
+    # print(labels.shape)
 
 
     test_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{modality.modeltype}_test"))
@@ -639,7 +643,7 @@ def evaluate_classifier(classifier, y_test, labels):
 
 
 
-    prediction = evaluate_model.predict([y_test],batch_size = modality.classifier_test_batchsize)
+    prediction = classifier.predict([y_test],batch_size = modality.classifier_test_batchsize)
 
     y_pred_bool = np.argmax(prediction,axis=1)
     
