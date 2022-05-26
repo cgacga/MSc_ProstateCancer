@@ -17,3 +17,6 @@ dependencies:
     - classification-models-3D==1.0.3
     - efficientnet-3D==1.0.2
     - segmentation-models-3D==1.0.3
+    - tensorflow-addons==0.17.0
+    - pydot==1.4.2
+    - graphviz==0.20

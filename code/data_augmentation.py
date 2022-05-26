@@ -1,7 +1,7 @@
 
 ### Data Augmentation ###
 
-import time
+import os, time, random
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
@@ -9,8 +9,14 @@ from tensorflow.keras import layers
 import segmentation_models_3D as sm
 from params import modality
 from model_building import PlotCallback
-from main import set_seed
+#from main import set_seed
 
+def set_seed(s=42):
+    random.seed(s)
+    np.random.seed(s)
+    tf.random.set_seed(s)
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    os.environ['PYTHONHASHSEED'] = str(s) 
 
 def keras_augment(images,ksizes,depth,channels):
 
@@ -57,7 +63,7 @@ class Patches(layers.Layer):
 
 
 def augment_patches(patients):
-    set_seed(42)
+    set_seed()
     #print("augment")
     #print(patients.shape)
     #if len(patients.shape) < 5:
@@ -280,7 +286,7 @@ def augment_build_datasets(y_train,y_val):
         trainDS = (
             train_loader
                 .batch(
-                    batch_size = modality.batch_size
+                    batch_size = modality.autoencoder_batchsize
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .map(
                     #lambda x, y: (tf.repeat(x,3,-1), y)
@@ -294,7 +300,7 @@ def augment_build_datasets(y_train,y_val):
         valDS = (
             val_loader
                 .batch(
-                    batch_size = modality.batch_size
+                    batch_size = modality.autoencoder_batchsize
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .map(
                     #lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
@@ -333,7 +339,7 @@ def augment_build_datasets(y_train,y_val):
         trainDS = (
             train_loader
                 .batch(
-                    batch_size = modality.batch_size
+                    batch_size = modality.autoencoder_batchsize
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .map(
                     lambda x, y: (tf.repeat(x,3,-1), y)
@@ -344,7 +350,7 @@ def augment_build_datasets(y_train,y_val):
         valDS = (
             val_loader
                 .batch(
-                    batch_size = modality.batch_size
+                    batch_size = modality.autoencoder_batchsize
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .map(
                     lambda x, y: (tf.repeat(x,3,-1), y)

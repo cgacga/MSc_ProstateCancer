@@ -1,19 +1,26 @@
 
 ### Model building ###
-import os, time, json
+import os, time, json, statistics
 import tensorflow as tf
 from tensorflow import keras
+import tensorflow_addons as tfa
 import segmentation_models_3D as sm
 sm.set_framework('tf.keras')
 from img_display import *
 from params import modality
 from merged_model import get_merged_model
+import pandas as pd
+from tensorflow.keras import layers
+from tensorflow.keras.models import Model
+from sklearn.utils import resample
+from sklearn.metrics import classification_report
 
 
 class PlotCallback(tf.keras.callbacks.Callback):
     x_val = None
 
     def __init__(self):
+        self.modeltype = modality.modeltype
         #self.x_val = PlotCallback.x_val#self.__class__.x_val
         #self.file_writer = tb_callback._val_writer
         #self.x_val = x_val
@@ -21,20 +28,25 @@ class PlotCallback(tf.keras.callbacks.Callback):
         #self.savepath = f"../tb_logs/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
         #self.savepath = modality.tensorboard_path
 
-        self.savename = f"{modality.modality_name}_{modality.dtime}"
+        #self.savename = f"{modality.modality_name}_{modality.dtime}"
+        self.savename = f"{modality.modality_name}_{self.modeltype}"
         
         #modality.model_name
         #f"{modality.job_name}_{modality.modality_name}_{modality.time}"
 
         self.epoch_modulo = modality.tensorboard_img_epoch
+        self.nimages = modality.tensorboard_num_predictimages
+        self.job_name = modality.job_name
+        self.description = modality.mrkdown()
+        self.model_name = modality.model_name
 
         #logdir = os.path.abspath(self.savepath) #opp ^ (fra params)
         
         #self.path = os.path.abspath(os.path.join(modality.tensorboard_path,f"../"))
         #self.file_writer = tf.summary.create_file_writer(logdir=modality.tensorboard_path)
         #self.file_writer = tf.summary.create_file_writer(logdir=path)
-        self.train_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,"train"))
-        self.val_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,"val"))
+        self.train_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{self.modeltype}_train"))
+        self.val_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{self.modeltype}_val"))
         #self.file_writer = self.val_writer
 
 
@@ -59,14 +71,14 @@ class PlotCallback(tf.keras.callbacks.Callback):
         image = img_pltsave([img for img in img_stack],None,True)
         
         with self.val_writer.as_default():
-            tf.summary.image(modality.job_name+f"_img/{self.savename}", image, step=self.epoch, description=modality.mrkdown())
+            tf.summary.image(self.job_name+f"_img/{self.savename}", image, step=self.epoch, description=self.description)
             self.val_writer.flush()
 
     def plot_merged_predictions(self):
 
         pred_sample = [np.zeros_like(self.__class__.x_val[i]) for i in range(len(self.__class__.x_val))]
 
-        for i in range(modality.tensorboard_num_predictimages):
+        for i in range(self.nimages):
             img = self.model.predict([tf.repeat(tf.expand_dims(xval[i],0),3,-1) for xval in self.__class__.x_val])
             for j in range(len(img)):
                 pred_sample[j][i] = img[j]
@@ -77,7 +89,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
             
             image = img_pltsave([img for img in img_stack],None,True)
             with self.val_writer.as_default():
-                tf.summary.image(modality.job_name+f"_img/{name}_{self.savename}", image, step=self.epoch, description=modality.mrkdown())
+                tf.summary.image(self.job_name+f"_img/{name}_{self.savename}", image, step=self.epoch, description=self.description)
                 self.val_writer.flush()
 
 
@@ -86,7 +98,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
         modality.training_logs = logs
         #with modality.strategy.scope():
         with self.val_writer.as_default():
-            tf.summary.text(modality.job_name+f"_txt/{self.savename}", modality.mrkdown(), step=self.epoch, description=modality.model_name)
+            tf.summary.text(self.job_name+f"_txt/{self.savename}", self.description, step=self.epoch, description=self.model_name)
             self.val_writer.flush()
 
     def summary(self,logs):
@@ -96,14 +108,14 @@ class PlotCallback(tf.keras.callbacks.Callback):
         if train_logs:
             with self.train_writer.as_default():
                 for key, value in train_logs.items():
-                    tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
+                    tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_{key}",value,self.epoch)#
                     
                 self.train_writer.flush()
         if val_logs:
             with self.val_writer.as_default():
                 for key, value in val_logs.items():
 
-                    tf.summary.scalar(f"{modality.modality_name}/{key[4:]}",value,self.epoch)#
+                    tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_{key[4:]}",value,self.epoch)#
                     
                 self.val_writer.flush()
 
@@ -121,9 +133,9 @@ class PlotCallback(tf.keras.callbacks.Callback):
                 for key, value in train_logs.items():
                     for name in modality.merged_modalities:
                         if key.startswith(name):
-                            tf.summary.scalar(f"{name}/{key[len(name)+1:]}",value,self.epoch)
+                            tf.summary.scalar(f"{name}/{self.modeltype}_{key[len(name)+1:]}",value,self.epoch)
                     if key.startswith("loss"):
-                        tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)
+                        tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_global_{key}",value,self.epoch)
                     
                     #if key != "learning_rate":
                     #    tf.summary.scalar(f"{modality.modality_name}/train_{key}",value,self.epoch)#
@@ -135,9 +147,9 @@ class PlotCallback(tf.keras.callbacks.Callback):
                     key = key[4:]
                     for name in modality.merged_modalities:
                         if key.startswith(name):
-                            tf.summary.scalar(f"{name}/{key[len(name)+1:]}",value,self.epoch)
+                            tf.summary.scalar(f"{name}/{self.modeltype}_{key[len(name)+1:]}",value,self.epoch)
                     if key.startswith("loss"):
-                        tf.summary.scalar(f"{modality.modality_name}/global_{key}",value,self.epoch)#
+                        tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_global_{key}",value,self.epoch)#
                     #key = key[4:]  # Remove 'val_' prefix.
                     #tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
                     #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
@@ -182,24 +194,29 @@ class PlotCallback(tf.keras.callbacks.Callback):
             #     self.plot_merged_predictions()
             # else:
             #     self.plot_predictions()
+        
+        
         if isinstance(self.__class__.x_val, list):
             self.summary_merged(logs)
-            if self.epoch%self.epoch_modulo==0:
-                self.plot_merged_predictions()
+            if self.modeltype == "autoencoder":
+                if self.epoch%self.epoch_modulo==0:
+                    self.plot_merged_predictions()
         else:
             self.summary(logs)
-            if self.epoch%self.epoch_modulo==0:
-                self.plot_predictions()
+            if self.modeltype == "autoencoder":
+                if self.epoch%self.epoch_modulo==0:
+                    self.plot_predictions()
         
             
 
     def on_train_end(self, logs={}):
 
-        if self.epoch%self.epoch_modulo!=0:
-            if isinstance(self.__class__.x_val, list):
-                self.plot_merged_predictions()
-            else:
-                self.plot_predictions()
+        if self.modeltype == "autoencoder":
+            if self.epoch%self.epoch_modulo!=0:
+                if isinstance(self.__class__.x_val, list):
+                    self.plot_merged_predictions()
+                else:
+                    self.plot_predictions()
         
         self.json_summary(logs)
 
@@ -304,6 +321,8 @@ def get_unet_model(modality_name="autoencoder"):
     #TODO: sbatch variable for unet backbone
     #autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
 
+    modality.modeltype = "autoencoder"
+
     if modality.merged:
         autoencoder = get_merged_model()
     else:
@@ -321,13 +340,13 @@ def get_unet_model(modality_name="autoencoder"):
             os.makedirs(modality.model_path)
 
 
-        tf.keras.utils.plot_model(
-            autoencoder,
-            show_shapes=True,
-            show_layer_activations = True,
-            expand_nested=True,
-            to_file=os.path.abspath(modality.model_path+f"autoencoder.png")
-            )
+    tf.keras.utils.plot_model(
+        autoencoder,
+        show_shapes=True,
+        show_layer_activations = True,
+        expand_nested=True,
+        to_file=os.path.abspath(modality.model_path+f"{modality.modeltype}.png")
+        )
     #https://github.com/ZFTurbo/segmentation_models_3D/blob/master/segmentation_models_3D/models/unet.py#L166
 
     #TODO: sbatch variable for learning_rate
@@ -336,7 +355,7 @@ def get_unet_model(modality_name="autoencoder"):
     #opt.lr.assign(learning_rate)
 
     #autoencoder._name = f"{modality_name}_{os.environ['SLURM_JOB_NAME']}"
-    autoencoder._name = modality.model_name#f"{modality_name}_{modality.job_name}"
+    autoencoder._name = f"{modality.modeltype}_{modality.modality_name}"#f"{modality_name}_{modality.job_name}"
 
     #TODO: check loss function?
     #TODO: add MSE and MAE for each epoch and save log
@@ -348,7 +367,15 @@ def get_unet_model(modality_name="autoencoder"):
     #mae = tf.keras.losses.MeanAbsoluteError()#reduction)
     
 
-    autoencoder.compile(modality.optimizer, loss=modality.loss, metrics=modality.metrics)
+
+    opt = tf.keras.optimizers.Adam(learning_rate=modality.autoencoder_learning_rate)
+    loss = tf.keras.losses.MeanSquaredError(name="loss")
+    metrics = [
+        tf.keras.metrics.MeanSquaredError(name='MSE'),
+        tf.keras.metrics.MeanAbsoluteError(name='MAE')
+    ]
+
+    autoencoder.compile(opt, loss=loss, metrics=metrics)
 
 
     print(autoencoder.summary())
@@ -436,4 +463,185 @@ def model_building(trainDS, valDS):
     print("\n"+f" Model building finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
     return model
+
+
+def build_train_classifier(encoder, y_train, y_val, labels):
+    
+    modality.modeltype = "classifier"
+
+    
+    if modality.classifier_freeze_encoder:
+        for layer in encoder.layers:
+            if not layer.name.startswith("center"):
+                layer.trainable = False
+
+    x = encoder.output
+    x = layers.Flatten(name='flatten')(x)
+    
+    if modality.classifier_multi_dense:
+        x = layers.Dense(4096, activation='relu', name='fc1')(x)
+        x = layers.Dense(4096, activation='relu', name='fc2')(x)
+    x = layers.Dense(1, activation='sigmoid', name='predictions')(x)
+
+    #N = x.shape[-1]
+    
+    classifier = Model(encoder.input, x,name=f'{modality.modeltype}_{modality.modality_name}')
+    
+    if encoder.input.shape[-1] != 1:
+        inp = layers.Input(shape=(*encoder.input.shape[1:-1],1))
+        l1 = layers.Conv3D(3, (1, 1, 1))(inp) # map N channels data to 3 channels
+        out = classifier(l1)
+        classifier = Model(inp, out, name=f'{modality.modeltype}_{modality.modality_name}')
+
+    opt = tf.keras.optimizers.Adam(learning_rate=modality.classifier_train_learning_rate)
+    loss = tf.keras.losses.BinaryCrossentropy(from_logits=False,name="loss")
+    metrics = tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")
+    classifier.compile(opt, loss=loss, metrics=metrics)
+
+    
+    tf.keras.utils.plot_model(
+        classifier,
+        show_shapes=True,
+        show_layer_activations = True,
+        expand_nested=True,
+        to_file=os.path.abspath(modality.model_path+f"{modality.modeltype}.png")
+        )
+
+    if isinstance(y_train, np.ndarray):
+        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)},labels["y_train"]))
+        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)},labels["y_val"]))
+
+    else:
+        train_loader = tf.data.Dataset.from_tensor_slices((y_train, labels["y_train"]))
+        val_loader = tf.data.Dataset.from_tensor_slices((y_val, labels["y_val"]))
+    
+    trainDS = (
+        train_loader
+            .batch(
+                batch_size = modality.classifier_train_batchsize
+                ,num_parallel_calls=tf.data.AUTOTUNE)
+            .prefetch(
+                buffer_size = tf.data.AUTOTUNE)
+                )
+    valDS = (
+        val_loader
+            .batch(
+                batch_size = modality.classifier_train_batchsize
+                ,num_parallel_calls=tf.data.AUTOTUNE)
+            .prefetch(
+                buffer_size = tf.data.AUTOTUNE)
+                )
+
+    #classifier = train_classifier(classifier, trainDS, valDS)
+
+    print("\n"+f"{modality.modeltype}-{modality.model_name} - training started".center(50, '.'))      
+                    
+    pltcallback = PlotCallback()
+    pltcallback.x_val = None
+
+    classifier.fit(
+        trainDS,
+        validation_data = valDS,
+        epochs = modality.classifier_train_epochs,
+        verbose=2,
+        callbacks = [pltcallback],
+    )
+    
+    classifier.save(modality.model_path+"/classifier/")
+    
+    return classifier
+
+
+def evaluate_classifier(classifier, y_test, labels):
+    
+    modality.modeltype = "evaluate_classifier"
+
+
+    opt = tf.keras.optimizers.Adam(learning_rate=modality.classifier_test_learning_rate)
+    loss = tf.keras.losses.BinaryCrossentropy(from_logits=False,name="loss")
+    metrics = [
+            tf.keras.metrics.BinaryAccuracy(name="accuracy"),
+            tf.keras.metrics.Precision(name="precision"),
+            tf.keras.metrics.Recall(name="recall"),
+            tfa.metrics.F1Score(num_classes=2, average=None),
+            tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")]
+
+    evaluate_model = classifier.compile(opt, loss=loss, metrics=metrics)
+
+
+    auc_l = list()
+    alpha = 0.95
+    p = ((1.0-alpha)/2.0) *100
+    #if isinstance(y_test, np.ndarray):
+    #    n_size = int(y_test[0].shape[0])
+    #else:
+    #    n_size = int(y_test.shape[0])
+    n_size = len(labels)
+    n_iterations = modality.classifier_test_Nbootstrap
+
+    print(f"nsize same ?  {int(y_test.shape[0]) == len(labels)}")
+    print(f"len(labels) =  {len(labels)}")
+    print(f"y_test shape =  {int(y_test.shape[0])}")
+
+
+    test_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{modality.modeltype}_test"))
+
+    for i in range(1,n_iterations+1):
+        #a = np.random.randint(1,20000)
+        test = [resample(y,n_samples= n_size, replace = True,stratify = labels, random_state = i) for y in y_test]
+        
+        labels_test = resample(labels,n_samples = n_size, replace = True,stratify = labels, random_state = i)
+
+        results = evaluate_model.evaluate(test,labels_test,batch_size = modality.classifier_test_batchsize)
+
+        auc_l.append(results[-1])
+
+        print(f"Run: {i}/{n_iterations} - AUC: {results[-1]}")
+        del results, test, labels_test, a
+
+        average_auc = sum(auc_l) / len(auc_l)
+
+        std_auc = statistics.stdev(auc_l)
+
+        # confidence intervals
+
+        lower_boot = max(0.0,np.percentile(auc_l,p))
+
+        p = (alpha+((1.0-alpha)/2.0))* 100
+
+        upper_boot = min(1.0,np.percentile(auc_l,p))
+
+        results["avg_AUC"] = average_auc
+        results["std_AUC"] = std_auc
+        results["lower_boot"] = lower_boot
+        results["upper_boot"] = upper_boot
+
+        with test_writer.as_default():
+            for key, value in results.items():
+                tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value,i)
+            test_writer.flush()
+
+
+            # with test_writer.as_default():
+            #     for key, value in results.items():
+            #         for name in modality.merged_modalities:
+            #             if key.startswith(name):
+            #                 tf.summary.scalar(f"{name}/{modality.modeltype}_{key[len(name)+1:]}",value,i)
+            #         if key.startswith("loss"):
+            #             tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_global_{key}",value,i)
+            #     test_writer.flush()
+
+    print("Average and std AUC",average_auc,std_auc)
+
+    print('%.1f confidence interval %.1f%% and %.1f%%' %(alpha*100,lower_boot*100,upper_boot*100))
+
+
+
+    prediction = evaluate_model.predict([y_test],batch_size = modality.classifier_test_batchsize)
+
+    y_pred_bool = np.argmax(prediction,axis=1)
+    
+
+
+    print(classification_report(labels.argmax(axis=1),y_pred_bool))
 

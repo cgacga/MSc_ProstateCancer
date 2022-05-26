@@ -31,17 +31,24 @@ class parameters(object):
                 encoder_weights : str = "imagenet",
                 encoder_freeze : bool = False,
                 decoder_block_type : str = "upsampling", #transpose
-                epochs : int = 100,
+                autoencoder_epocs : int = 100,
                 #batch_size_prgpu : int = 2,
-                batch_size : int = 2,
-                optimizer : tensorflow.optimizers = tensorflow.optimizers.Adam(),
-                loss : str = "mse",
-                metrics : list[str] = ["mse", "mae"],
-                learning_rate : float = 1e-4,
+                autoencoder_batchsize : int = 2,
+                #optimizer : tensorflow.optimizers = tensorflow.optimizers.Adam(),
+                #loss : str = "mse",
+                #metrics : list[str] = ["mse", "mae"],
+                autoencoder_learning_rate : float = 1e-4,
+                classifier_train_learning_rate : float = 1e-4,
+                classifier_test_learning_rate : float = 1e-4,
                 no_adjacent : bool = False,
                 minmax_shape_reduction : tuple = [5,15],
                 minmax_augmentation_percentage : tuple = [10,15],
-                mask_vs_rotation_percentage : int = 50):
+                mask_vs_rotation_percentage : int = 50,
+                classifier_freeze_encoder : bool = False,
+                classifier_multi_dense : bool = True,
+                classifier_train_batchsize : int = 4,#16,
+                classifier_train_epochs : int = 1,#00,
+                classifier_test_batchsize : int = 16):
         self = parameters()
         #Global parameters
         self.__class__.data_path = data_path
@@ -62,14 +69,29 @@ class parameters(object):
         self.activation = activation
         self.classes = classes 
         #Training parameters
-        self.epochs = epochs
-        self.batch_size = batch_size
+        #self.epochs = epochs
+        #self.batch_size = batch_size
         #self.batch_size_prgpu = batch_size_prgpu
         #self.global_batch_size = batch_size_prgpu # int
-        self.optimizer = optimizer
-        self.loss = loss
-        self.metrics = metrics 
-        self.learning_rate = learning_rate 
+        #self.optimizer = tensorflow.optimizers.Adam()
+
+        self.modeltype = str
+
+        self.autoencoder_learning_rate = autoencoder_learning_rate
+        self.autoencoder_epocs = autoencoder_epocs
+        self.autoencoder_batchsize = autoencoder_batchsize
+
+        self.classifier_freeze_encoder = classifier_freeze_encoder
+        self.classifier_multi_dense = classifier_multi_dense
+        self.classifier_train_batchsize = classifier_train_batchsize
+        self.classifier_train_epochs = classifier_train_epochs
+        self.classifier_train_learning_rate = classifier_train_learning_rate
+
+        self.classifier_test_learning_rate = classifier_test_learning_rate
+        self.classifier_test_batchsize = classifier_test_batchsize
+        self.classifier_test_Nbootstrap=3#100
+
+        #self.learning_rate = learning_rate 
         #Data augmentation parameters
         self.no_adjacent = no_adjacent
         self.minmax_shape_reduction = minmax_shape_reduction
@@ -127,8 +149,8 @@ class parameters(object):
         if missing:
             raise KeyError(f"Missing value for: {missing}")
         else:
-            _g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
-            _g.optimizer.lr.assign(_g.learning_rate)
+            #_g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
+            #_g.optimizer.lr.assign(_g.learning_rate)
             _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{modality_name}/")+"/"
             #_g.tensorboard_path = os.path.abspath(f"../tb_logs/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
             _g.tensorboard_path = os.path.abspath(f"../tensorboard/{_g.job_name}/{modality_name}_{_g.dtime}")+"/"#/{modality_name}")+"/"

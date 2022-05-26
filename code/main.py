@@ -1,3 +1,4 @@
+#%%
 ### Importing libraries ###
 import os, sys, time, random, gc
 import numpy as np
@@ -6,6 +7,7 @@ from tensorflow.keras.models import Model
 
 from preprocess import *
 from data_augmentation import *
+#import data_augmentation
 from model_building import *
 from img_display import *
 from slurm_array import *
@@ -58,13 +60,8 @@ os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '2'
 # np.random.seed(42)
 
 # For reproducible results    
-def set_seed(s):
-    random.seed(s)
-    np.random.seed(s)
-    tf.random.set_seed(s)
-    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-    os.environ['PYTHONHASHSEED'] = str(s) 
-set_seed(42)
+
+set_seed()
 
 
 def main(*args, **kwargs):
@@ -82,10 +79,106 @@ def main(*args, **kwargs):
         elif slurm_array == "samesize":
             samesize_run(index)
     else:
-        raise ValueError("Missing slurm_array in kwargs")
+        #raise ValueError("Missing slurm_array in kwargs")
+
+        index = 0
+            
+        for index in range(2):
+            backbone_name = "vgg16"
+            encoder_weights = "imagenet"
+            encoder_freeze = False
+            activation = "sigmoid"
+            decoder_block_type = "upsampling"
+            encoder_freeze = False
+
+            modality_name = ["ADC","t2tsetra"]       
+            autoencoder_learning_rate = [1e-3, 1e-4]
+            cube = [[[15,15],[60,60],100],[[10,20],[40,60],50]]
+
+            
+            center_filter = 256
+            decoder_filters = (256, 128, 64, 32, 16)
+            encoder_method, decoder_method, encode_try_maxpool_first, decode_try_upsample_first = ["upsample","maxpool",False,True]
+            
 
 
+            iterate = list(itertools.product(
+                                    cube,
+                                    autoencoder_learning_rate,
+                                    modality_name
+                                    ))
 
+            cube_params, autoencoder_learning_rate, modality_name = iterate[index]
+            minmax_shape_reduction, minmax_augmentation_percentage,mask_vs_rotation_percentage = cube_params
+
+            if modality_name == "ADC":
+                autoencoder_epocs = 500
+                autoencoder_batchsize = 32
+                reshape_dim = (32,128,96)
+            elif modality_name == "t2tsetra":
+                autoencoder_epocs = 250
+                autoencoder_batchsize = 2
+                reshape_dim = None
+
+            job_name = f"e{autoencoder_epocs}_lr{autoencoder_learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{autoencoder_batchsize}"
+
+            parameters.set_global(
+                    data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
+                    job_name = job_name,
+                    autoencoder_batchsize = autoencoder_batchsize,
+                    encoder_freeze = encoder_freeze,
+                    decoder_block_type = decoder_block_type, 
+                    autoencoder_epocs = autoencoder_epocs,
+                    autoencoder_learning_rate  = autoencoder_learning_rate,
+                    minmax_shape_reduction  = minmax_shape_reduction,
+                    minmax_augmentation_percentage  = minmax_augmentation_percentage,
+                    mask_vs_rotation_percentage = mask_vs_rotation_percentage
+                    )
+
+            parameters.add_modality(
+                modality_name = modality_name, 
+                reshape_dim=reshape_dim,  
+                autoencoder_batchsize=autoencoder_batchsize
+                )
+
+
+        
+        autoencoder_batchsize = 1
+        autoencoder_epocs = 350
+
+        job_name = f"e{autoencoder_epocs}_lr{autoencoder_learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{autoencoder_batchsize}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}"
+
+
+        parameters.set_global(
+                data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
+                job_name = job_name,
+                autoencoder_batchsize = autoencoder_batchsize,
+                encoder_freeze = encoder_freeze,
+                decoder_block_type = decoder_block_type, 
+                autoencoder_epocs = autoencoder_epocs,
+                autoencoder_learning_rate  = autoencoder_learning_rate,
+                minmax_shape_reduction  = minmax_shape_reduction,
+                minmax_augmentation_percentage  = minmax_augmentation_percentage,
+                mask_vs_rotation_percentage = mask_vs_rotation_percentage
+                )
+
+        parameters.join_modalities(["ADC", "t2tsetra"], encoder_method = encoder_method, decoder_method=decoder_method, center_filter=center_filter, decoder_filters=decoder_filters, decode_try_upsample_first=decode_try_upsample_first,encode_try_maxpool_first=encode_try_maxpool_first)
+
+        #modality_names = ["ADC", "t2tsetra"]
+        #parameters.insert_param(f"Merged_{'-'.join(modality_names)}","job_name", job_name)
+
+
+        # parameters.add_modality(
+        #     modality_name = "ADC", 
+        #     reshape_dim=(32,128,96),
+        #     #skip_modality=True
+        #     )
+        # parameters.add_modality(
+        #     modality_name = "t2tsetra", 
+        #     reshape_dim=(32,384,384),
+        #     #skip_modality=True
+        #     )
+        #parameters.join_modalities(["ADC", "t2tsetra"])
 
 
     # try:
@@ -166,45 +259,125 @@ def main(*args, **kwargs):
     #     # parameters.set_current("Merged")
     #     # get_merged_model()
     #     # tf.keras.backend.clear_session()
+
             
-    y_train, y_val, pat_df = preprocess(parameters)
+#    y_train, y_val, y_test, pat_df = preprocess(parameters)
+    
     
     # if os.path.isdir(modality.model_path):
-    #     print("Loading model")
-    #     encoder = tf.keras.models.load_model(modality.model_path)
-    # else:
+    #     try:
+    #         build_classifier()
+    #         encoder = tf.keras.models.load_model(modality.model_path)
+    #         print("Loaded model")
+    #     except:
+    #         print("Failed to load model")
+    #         encoder = None
 
+    #else:
+        #y_train, y_val, pat_df = preprocess(parameters)
+        #y_train, y_val, pat_df = preprocess(pat_slices, pat_df, autoencoder = True)
+    pat_slices, pat_df = preprocess(parameters,True)
 
-    #models = {}
-    # for modality_name in parameters.lst:
-    #     parameters.set_current(modality_name)
+    #print(len(pat_slices[:,0]))
+    #pd.DataFrame.to_csv(pat_df, f"asdqwe_førsplit.csv")
 
     for modality_name in parameters.lst.keys():
         parameters.set_current(modality_name)
         if modality.skip_modality:
             continue
-        print(f"\nCurrent parameters:\n{modality.mrkdown()}")
+            
+        encoder = None
+        if os.path.isdir(modality.model_path+"/encoder/"):
+            try:
+                encoder = tf.keras.models.load_model(modality.model_path+"/encoder/", compile=False)
+                print("Loaded model")
+            except:
+                
+                print("Failed to load model")
+                pass
 
-        trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
 
-        autoencoder = model_building(trainDS, valDS)
+        # y_train, y_val, y_test, pat_df = split_data(pat_slices, pat_df, autoencoder = False)
 
-        encoder = Model(autoencoder.input, autoencoder.get_layer("center_block2_relu").output,name=f'encoder_{modality.modality_name}')
 
-        encoder.save(modality.model_path)
-
-        tf.keras.utils.plot_model(
-        encoder,
-        show_shapes=True,
-        show_layer_activations = True,
-        expand_nested=True,
-        to_file=os.path.abspath(modality.model_path+f"encoder.png")
-        )
+        # import pandas
         
-        #models[modality_name] = autoencoder
-        del autoencoder, encoder, trainDS, valDS
-        tf.keras.backend.clear_session()
-        gc.collect()
+        # labels = {}
+        # for split in pat_df.split.unique():
+            
+        #     label_split = pat_df.sort_values("pat_idx").drop_duplicates("Subject ID").ClinSig.where(pat_df.split == split).dropna().replace({"non-significant": 0, "significant": 1})
+
+        #     labels[split] = tf.constant(label_split, dtype=tf.int32)
+            
+
+            #pandas.DataFrame.to_csv(asd, f"asdqwe_{split}.csv")
+        #asd = pat_df.sort_values("pat_idx").groupby(["Subject ID","split"])
+        
+        # for i,asd in enumerate(asd):
+        # #print(pat_df.ClinSig)
+        #     print(asd)
+        #     print()
+        #     pandas.DataFrame.to_csv(asd[i], f"asdqwe{i}.csv")
+
+        
+        if encoder:
+            y_train, y_val, y_test, pat_df = split_data(pat_slices, pat_df, autoencoder = False)
+
+
+            labels = {}
+            for split in pat_df.split.unique():
+                
+                label_split = pat_df.sort_values("pat_idx").drop_duplicates("Subject ID").ClinSig.where(pat_df.split == split).dropna().replace({"non-significant": 0, "significant": 1})
+
+                labels[split] = tf.constant(label_split, dtype=tf.int32)
+
+            classifier = build_train_classifier(encoder, y_train[modality.idx], y_val[modality.idx], labels)
+
+            evaluate_classifier(classifier, y_test[modality.idx], labels["y_test"])
+            #classifier = train_classifier(classifier, y_train[modality.idx], y_val[modality.idx])
+
+
+            
+
+            #classifier = build_classifier(encoder, pat_df)
+            print(f"\nCurrent parameters:\n{modality.mrkdown()}")
+            
+            break
+
+        else:
+
+            print("Failed to load model")
+            print("Failed to load model")
+            print("Failed to load model")
+            
+            y_train, y_val, pat_df = split_data(pat_slices, pat_df, autoencoder = True)
+            print(f"\nCurrent parameters:\n{modality.mrkdown()}")
+
+
+            
+
+            #trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
+
+            # autoencoder = model_building(trainDS, valDS)
+
+            # encoder = Model(autoencoder.input, autoencoder.get_layer("center_block2_relu").output,name=f'encoder_{modality.modality_name}')
+
+            # encoder.save(modality.model_path+"/encoder/")
+
+            # tf.keras.utils.plot_model(
+            # encoder,
+            # show_shapes=True,
+            # show_layer_activations = True,
+            # expand_nested=True,
+            # to_file=os.path.abspath(modality.model_path+f"encoder.png")
+            # )
+            
+            #models[modality_name] = autoencoder
+            #del autoencoder, encoder, trainDS, valDS
+            tf.keras.backend.clear_session()
+            gc.collect()
+        
+        #pd.DataFrame.to_csv(pat_df, f"asd_split_encoder{modality_name}.csv")
     
     print("\n"+f"Job completed {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '*')+"\n")
  
@@ -366,3 +539,5 @@ if __name__ == '__main__':
         main(*args, **kwargs)
     else: main()
 
+
+# %%

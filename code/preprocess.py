@@ -6,6 +6,8 @@ import pandas as pd
 import tensorflow as tf
 import SimpleITK as sitk
 from sklearn.model_selection import train_test_split
+from params import modality
+from data_augmentation import set_seed
 
 
 def parse_csv(data_path,type_lst):
@@ -278,28 +280,40 @@ def train_test_validation(patients_arr, patients_df, ratio):
     :param validation_ratio: Ratio of training data
     :return: training, test and validation sets.
     """
+    old_pat_index = patients_df.idx.apply(lambda x: x[0]).unique()
     patients_df=patients_df[~patients_df['ClinSig'].isna()].copy()
-    patients_arr = patients_arr[patients_df.idx.apply(lambda x: x[0]).unique()]
+    pat_index = patients_df.idx.apply(lambda x: x[0]).unique()
+    #patients_arr = patients_arr[patients_df.idx.apply(lambda x: x[0]).unique()]
+    patients_arr = patients_arr[pat_index]
+    
 
     print(f"\n{'Splitting'.center(50, '.')}")
     train_ratio,test_ratio,validation_ratio = ratio
     # splitting the data into training, test and validation sets
-    x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=(1-test_ratio), random_state=42, shuffle=True)
+    #x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=(1-test_ratio), random_state=42, shuffle=True)
+
+    x_train, x_test, train_df, test_df = train_test_split(patients_arr , pat_index, train_size=(1-test_ratio), random_state=42, shuffle=True)
+    
     x_train, x_val, train_df, val_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio))
 
     # Update the dataframe with the new indexes
     df_idx = np.concatenate([train_df, test_df, val_df])
     split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df,val_df]])
-    split_names = np.concatenate([["train_df"]*len(train_df), ["test_df"]*len(test_df), ["val_df"]*len(val_df)])
-    patients_df[["split","idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
+    split_names = np.concatenate([["y_train"]*len(train_df), ["y_test"]*len(test_df), ["y_val"]*len(val_df)])
+    patients_df[["split","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
     
+    n_removed = len(pat_index)-len(old_pat_index)#len(patients_df.idx.apply(lambda x: x[0]))
+    if n_removed:
+        print(f"\nRemoved {n_removed} patients without labels")
+        
+    print(f"\n|\tTrain\t|\tVal\t|\tTest\t|")
+    print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|")
+    print(f"|\t{len(x_train)}\t|\t{len(x_val)}\t|\t{len(x_test)}\t|")
 
-    print(f"\n|\tTrain\t|\tTest\t|\tVal\t|")
-    print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
-    print(f"|\t{len(x_train)}\t|\t{len(x_test)}\t|\t{len(x_val)}\t|")
-
-    print(f'\nTotal - {[f"{k}:{v}" for k,v in patients_df.ClinSig.value_counts().items()]}')
-    [print(f'{df} - {[f"{k}:{v} - ({(v/patients_df.ClinSig.value_counts()[k])*100:.0f}%)" for k,v in patients_df[patients_df.split == df].ClinSig.value_counts().items()]}') for df in ["train_df","test_df","val_df"]][0]
+    print(f'\nTotal - {[f"{k}:{v}" for k,v in patients_df.drop_duplicates("Subject ID").ClinSig.value_counts().items()]}')
+    subjectid = "Subject ID"
+    [print(f'{df} - {[f"{k}:{v} - ({(v/patients_df.drop_duplicates(subjectid).ClinSig.value_counts()[k])*100:.0f}%)" for k,v in patients_df[patients_df.split == df].drop_duplicates(subjectid).ClinSig.value_counts().items()]}') for df in ["y_train","y_val","y_test"]][0]
+    
 
     return x_train, x_test, x_val, patients_df
 
@@ -319,16 +333,16 @@ def train_val(patients_arr, patients_df, ratio):
     print(f"\n{'Splitting'.center(50, '.')}")
     train_ratio,test_ratio = ratio
     # splitting the data into training, test and validation sets
-    x_train, x_val, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=train_ratio, random_state=42, shuffle=True)
+    x_train, x_val, train_df, val_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=train_ratio, random_state=42, shuffle=True)
 
     # Update the dataframe with the new indexes
-    df_idx = np.concatenate([train_df, test_df])
-    split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df]])
-    split_names = np.concatenate([["train_df"]*len(train_df), ["test_df"]*len(test_df)])
-    patients_df[["split","idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
+    df_idx = np.concatenate([train_df, val_df])
+    split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,val_df]])
+    split_names = np.concatenate([["y_train"]*len(train_df), ["y_val"]*len(val_df)])
+    patients_df[["split","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
     
 
-    print(f"\n|\tTrain\t|\tTest\t|")
+    print(f"\n|\tTrain\t|\tVal\t|")
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
     print(f"|\t{len(x_train)}\t|\t{len(x_val)}\t|")
 
@@ -379,8 +393,8 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=1):
         output.append(reshaped_arr)
     
     # Updating the dataframe with new indexes
-    patients_df[["tag_idx","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([x[1],x[0]]))
-    patients_df.drop(columns="idx", inplace=True)
+    patients_df[["tag_idx","pat_idx"]] = patients_df.pat_idx.apply(lambda x: pd.Series([x[1],x[0]]))
+    #patients_df.drop(columns="idx", inplace=True)
 
     print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
 
@@ -413,38 +427,94 @@ def preprocess(parameters, nslices = False):
 
     pat_slices = normalize(pat_slices, pat_df)
 
-    #y_train, y_test, y_val, pat_df  = train_test_validation(pat_slices, pat_df, ratio=[0.7,0.2,0.1])
-    #y_train, y_test, y_val, pat_df  = image_to_np_reshape([y_train, y_test, y_val],pat_df,channels=1)
+    print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
-    y_train, y_val, pat_df = train_val(pat_slices, pat_df, ratio=[0.7,0.3])
-    y_train, y_val, pat_df  = image_to_np_reshape([y_train, y_val],pat_df,channels=1)
+    return pat_slices, pat_df
 
 
-    #shape_idx = {}
-    for modality_name in parameters.tags.keys():
-        shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
-        parameters.insert_param(modality_name,"image_shape",shape)
-        parameters.insert_param(modality_name,"idx",idx)
-        #shape_idx[modality_name] = {"image_shape":shape, "idx":idx}
+
+
+def update_shape(pat_df):
+    if modality.modality_name.startswith("Merged"):
+        shape,idx=[],[]
+        for modality_name in modality.merged_modalities:
+            shape_,idx_ = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
+            shape.append(shape_)
+            idx.append(idx_)
+        modality.same_shape = len(set(shape))==1.
+    else:
+        shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality.modality_name, case=False)].values[0]
     
-    for modality_name in parameters.lst.keys():
-        if modality_name.startswith("Merged"):
-            
-            # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst if not name.startswith("Merged")])
-            # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
-            # parameters.insert_param(modality_name,"idx",[parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])# if not name.startswith("Merged")])
-            # parameters.insert_param(modality_name,"image_shape",[shape_idx[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
-            # parameters.insert_param(modality_name,"idx",[shape_idx[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
-            
-            #print([tuple([shape_idx[name][ishape] for name in parameters.lst[modality_name]["merged_modalities"]]) for ishape in ["image_shape","tag_idx"]])
-            shape = tuple([parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
-            parameters.insert_param(modality_name,"image_shape",shape)
-            parameters.insert_param(modality_name,"same_shape",len(set(shape))==1.)
-            idx = tuple([parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
-            parameters.insert_param(modality_name,"idx",list(idx))
+    modality.image_shape = shape
+    modality.idx = idx
+    
+ 
+
+def split_data(pat_slices, pat_df, autoencoder = True):
+    set_seed()
+
+    if autoencoder:
+        y_train, y_val, pat_df = train_val(pat_slices, pat_df, ratio=[0.7,0.3])
+        y_train, y_val, pat_df  = image_to_np_reshape([y_train, y_val],pat_df,channels=1)
+    else:
+        y_train, y_val, y_test, pat_df  = train_test_validation(pat_slices, pat_df, ratio=[0.6,0.1,0.3])
+        y_train, y_val, y_test, pat_df  = image_to_np_reshape([y_train, y_test, y_val],pat_df,channels=1)
+    
+    update_shape(pat_df)
+
+    
+    # # shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
+    # # #parameters.insert_param(modality_name,"image_shape",shape)
+    # # #parameters.insert_param(modality_name,"idx",idx)
+    # # modality.modality_name.image_shape = shape
+    # # modality.modality_name.idx = idx
+    # if modality.modality_name.startswith("Merged"):
+    #     shape,idx=[],[]
+    #     for modality_name in modality.merged_modalities:
+    #         shape_,idx_ = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
+    #         shape.append(shape_)
+    #         idx.append(idx_)
+    #     modality.same_shape = len(set(shape))==1.
+    # else:
+    #     shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality.modality_name, case=False)].values[0]
+    
+    # modality.image_shape = shape
+    # modality.idx = idx
 
             
+    if autoencoder:
+        return y_train, y_val, pat_df
+    else: return y_train, y_val, y_test, pat_df
+    
+
+    # #shape_idx = {}
+    # for modality_name in parameters.tags.keys():
+    #     shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
+    #     parameters.insert_param(modality_name,"image_shape",shape)
+    #     parameters.insert_param(modality_name,"idx",idx)
+    #     #shape_idx[modality_name] = {"image_shape":shape, "idx":idx}
+    
+    # for modality_name in parameters.lst.keys():
+    #     if modality_name.startswith("Merged"):
+            
+    #         # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst if not name.startswith("Merged")])
+    #         # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
+    #         # parameters.insert_param(modality_name,"idx",[parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])# if not name.startswith("Merged")])
+    #         # parameters.insert_param(modality_name,"image_shape",[shape_idx[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
+    #         # parameters.insert_param(modality_name,"idx",[shape_idx[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
+            
+    #         #print([tuple([shape_idx[name][ishape] for name in parameters.lst[modality_name]["merged_modalities"]]) for ishape in ["image_shape","tag_idx"]])
+    #         shape = tuple([parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
+    #         parameters.insert_param(modality_name,"image_shape",shape)
+    #         parameters.insert_param(modality_name,"same_shape",len(set(shape))==1.)
+    #         idx = tuple([parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
+    #         parameters.insert_param(modality_name,"idx",list(idx))
+
         
+            
+    # if autoencoder:
+    #     return y_train, y_val, pat_df
+    # else: return y_train, y_val, y_test, pat_df
 
     # [parameters.insert_param(modality_name,"image_shape",pat_df["dim"][pat_df.tag.str.contains(modality_name, case=False)].values[0])for modality_name in parameters.lst if not modality_name.startswith("Merged")]
     # [parameters.insert_param(modality_name,"idx",pat_df["tag_idx"][pat_df.tag.str.contains(modality_name, case=False)].values[0]) for modality_name in parameters.lst if not modality_name.startswith("Merged")]
@@ -480,6 +550,6 @@ def preprocess(parameters, nslices = False):
 
 #x_train, x_val, x_val = expand_dims([x_train, x_val, x_val],dim=1)
         
-    print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
+    # print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
-    return y_train, y_val, pat_df
+    # return y_train, y_val, pat_df
