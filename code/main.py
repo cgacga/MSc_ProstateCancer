@@ -323,7 +323,6 @@ def main(*args, **kwargs):
         if encoder:
             y_train, y_val, y_test, pat_df = split_data(pat_slices, pat_df, autoencoder = False)
 
-
             labels = {}
             for split in pat_df.split.unique():
 
@@ -356,7 +355,6 @@ def main(*args, **kwargs):
             #classifier = build_classifier(encoder, pat_df)
             print(f"\nCurrent parameters:\n{modality.mrkdown()}")
             
-            break
 
         else:
 
