@@ -47,8 +47,9 @@ class parameters(object):
                 classifier_freeze_encoder : bool = False,
                 classifier_multi_dense : bool = True,
                 classifier_train_batchsize : int = 16,#16,
-                classifier_train_epochs : int = 20,#100,
-                classifier_test_batchsize : int = 16):
+                classifier_train_epochs : int = 100,
+                classifier_test_batchsize : int = 16,
+                autoencoder_job_name = str):
         self = parameters()
         #Global parameters
         self.__class__.data_path = data_path
@@ -89,7 +90,9 @@ class parameters(object):
 
         self.classifier_test_learning_rate = classifier_test_learning_rate
         self.classifier_test_batchsize = classifier_test_batchsize
-        self.classifier_test_Nbootstrap=30#100
+        self.classifier_test_Nbootstrap=100
+
+        self.autoencoder_job_name = autoencoder_job_name
 
         #self.learning_rate = learning_rate 
         #Data augmentation parameters
@@ -151,9 +154,9 @@ class parameters(object):
         else:
             #_g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
             #_g.optimizer.lr.assign(_g.learning_rate)
-            _g.model_path = os.path.abspath(f"../models_test/{_g.job_name}/{modality_name}/")+"/"
+            _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{modality_name}/")+"/"
             #_g.tensorboard_path = os.path.abspath(f"../tb_logs/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
-            _g.tensorboard_path = os.path.abspath(f"../tensorboard_test/{_g.job_name}/{modality_name}")+"/"#/{modality_name}_{_g.dtime}")+"/"
+            _g.tensorboard_path = os.path.abspath(f"../tensorboard/{_g.job_name}/{modality_name}")+"/"#/{modality_name}_{_g.dtime}")+"/"
             parameters.lst[modality_name] = _g.__dict__
             #if not merged:
             if not _g.merged:

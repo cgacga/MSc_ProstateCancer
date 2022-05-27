@@ -630,11 +630,11 @@ def evaluate_classifier(classifier, y_test, labels):
         #auc_l.append(res[-1])
         #print(f"Run: {i}/{n_iterations} - AUC: {res[-1]}")
         
-        results = {}
+        #results = {}
         for n,r in enumerate(res):
             results[names[n]].append(r)
 
-        results["f1_score"].append((2*results["precision"]*results["recall"])/(results["precision"]+results["recall"]))
+        results["f1_score"].append((2*results["precision"][-1]*results["recall"][-1])/(results["precision"][-1]+results["recall"][-1]))
             
         if i >1:
             
@@ -650,18 +650,18 @@ def evaluate_classifier(classifier, y_test, labels):
                 for key, value in results.items():
                     #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value[-1],i)
                     tf.summary.scalar(f"{modality.modeltype}/{key}",value[-1],i)
-                    s = stats(value)
-                    for i,k in enumerate(results_stats[key].keys()):
-                        results_stats[key][k].append(s[i])
+                    s = stats(value[-1])
+                    for index,k in enumerate(results_stats[key].keys()):
+                        results_stats[key][k].append(s[index])
                     #for k, v in results_stats[key].items():
                         #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{k}",s[i],i)
-                        tf.summary.scalar(f"{modality.modeltype}/{k}",s[i],i)
+                        tf.summary.scalar(f"{modality.modeltype}/{k}",s[index],i)
                 test_writer.flush()
 
             print(f"\n{i}/{n_iterations}")
             [print([f'{key} {value[-1]:.1f} - {" - ".join([f"{k[:-len(key)-1]} {v[-1]:.1f}"for k, v in results_stats[key].items()])}'][0])for key, value in results.items()][0]
 
-        del results, test, labels_test
+        del test, labels_test, res
 
 
 
@@ -670,7 +670,7 @@ def evaluate_classifier(classifier, y_test, labels):
     cfr = classification_report(labels.numpy(),np.argmax(prediction,axis=1),target_names=["non-significant","significant"], output_dict=True)   
 
     figure = plt.figure()
-    sns.set(font_scale=1.2)
+    #sns.set(font_scale=1.2)
     sns.heatmap(pd.DataFrame(cfr).T, annot=True, annot_kws={"size": 16})
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
@@ -701,12 +701,8 @@ def evaluate_classifier(classifier, y_test, labels):
             create_layout_summary(results,results_stats,modality.modeltype).SerializeToString(), step=0
         )
 
-
-
 def create_layout_summary(results,results_stats,model_type):
-    return cs_summary.pb(
-        layout_pb2.Layout(
-            category=[[
+    charts = [[
                 layout_pb2.Category(
                     title=key,
                     chart=[
@@ -734,9 +730,84 @@ def create_layout_summary(results,results_stats,model_type):
                                 ],
                             ),
                         ),
-                    ]for k in results_stats[key].keys() if not k.startswith("upper") or not k.startswith("lower")]],
+                    ][0] for k in results_stats[key].keys() if not k.startswith("upper") and not k.startswith("lower")]],
                 )
-            ]for key in results.keys()],
-        ),
-    )
+            ][0] for key in results.keys()]
+    a,b,c,d,e,f,g = charts
+    return cs_summary.pb(layout_pb2.Layout(
+            category=[a,b,c,d,e,f,g]
+        ))
+
+# def create_layout_summary(results,results_stats,model_type):
+#     charts = [[
+#                 layout_pb2.Category(
+#                     title=key,
+#                     chart=[
+#                             layout_pb2.Chart(
+#                                 title=key,
+#                                 margin=layout_pb2.MarginChartContent(
+#                                     series=[
+#                                         layout_pb2.MarginChartContent.Series(
+#                                             value=f"{model_type}/{key}",
+#                                             lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
+#                                             upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
+#                                         ),
+#                                     ],
+#                                 ),
+#                         ),*[[
+#                         layout_pb2.Chart(
+#                             title=k,
+#                             margin=layout_pb2.MarginChartContent(
+#                                 series=[
+#                                     layout_pb2.MarginChartContent.Series(
+#                                         value=f"{model_type}/{k}",
+#                                         lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
+#                                         upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
+#                                     ),
+#                                 ],
+#                             ),
+#                         ),
+#                     ][0] for k in results_stats[key].keys() if not k.startswith("upper") and not k.startswith("lower")]],
+#                 )
+#             ]for key in results.keys()]
+#     a,b,c,d,e,f,g = charts
+#     return cs_summary.pb(layout_pb2.Layout(
+#             category=[a,b,c,d,e,f,g]
+#         ))
+
+    # return cs_summary.pb(
+    # layout_pb2.Layout(
+    #         category=[[
+    #             layout_pb2.Category(
+    #                 title=key,
+    #                 chart=[
+    #                         layout_pb2.Chart(
+    #                             title=key,
+    #                             margin=layout_pb2.MarginChartContent(
+    #                                 series=[
+    #                                     layout_pb2.MarginChartContent.Series(
+    #                                         value=f"{model_type}/{key}",
+    #                                         lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
+    #                                         upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
+    #                                     ),
+    #                                 ],
+    #                             ),
+    #                     ),*[[
+    #                     layout_pb2.Chart(
+    #                         title=k,
+    #                         margin=layout_pb2.MarginChartContent(
+    #                             series=[
+    #                                 layout_pb2.MarginChartContent.Series(
+    #                                     value=f"{model_type}/{k}",
+    #                                     lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
+    #                                     upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
+    #                                 ),
+    #                             ],
+    #                         ),
+    #                     ),
+    #                 ][0] for k in results_stats[key].keys() if not k.startswith("upper") or not k.startswith("lower")]],
+    #             )
+    #         ]for key in results.keys()][0],
+    #     ),
+    # )
 

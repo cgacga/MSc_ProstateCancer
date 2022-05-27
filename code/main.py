@@ -287,17 +287,18 @@ def main(*args, **kwargs):
             
         encoder = None
         classifier = None
-        if os.path.isdir(modality.model_path+"/classifier/"):
+        model_path = os.path.abspath(f"../models_test/{modality.autoencoder_job_name}/{modality.modality_name}/")+"/"
+        if os.path.isdir(model_path+"/classifier/"):
             try:
-                classifier = tf.keras.models.load_model(modality.model_path+"/classifier/", compile=False)
+                classifier = tf.keras.models.load_model(model_path+"/classifier/", compile=False)
                 print("Loaded model")
             except:
                 print("Failed to load model")
                 pass
-        if os.path.isdir(modality.model_path+"/encoder/") and not classifier:
+        if os.path.isdir(model_path+"/encoder/") and not classifier:
 
             try:
-                encoder = tf.keras.models.load_model(modality.model_path+"/encoder/", compile=False)
+                encoder = tf.keras.models.load_model(model_path+"/encoder/", compile=False)
                 print("Loaded model")
             except:
                 print("Failed to load model")
@@ -374,28 +375,28 @@ def main(*args, **kwargs):
 
         else:
 
-            
+            break
             y_train, y_val, pat_df = split_data(pat_slices, pat_df, autoencoder = True)
             print(f"\nCurrent parameters:\n{modality.mrkdown()}")
 
 
             
 
-            #trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
+            trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
 
-            # autoencoder = model_building(trainDS, valDS)
+            autoencoder = model_building(trainDS, valDS)
 
-            # encoder = Model(autoencoder.input, autoencoder.get_layer("center_block2_relu").output,name=f'encoder_{modality.modality_name}')
+            encoder = Model(autoencoder.input, autoencoder.get_layer("center_block2_relu").output,name=f'encoder_{modality.modality_name}')
 
-            # encoder.save(modality.model_path+"/encoder/")
+            encoder.save(modality.model_path+"/encoder/")
 
-            # tf.keras.utils.plot_model(
-            # encoder,
-            # show_shapes=True,
-            # show_layer_activations = True,
-            # expand_nested=True,
-            # to_file=os.path.abspath(modality.model_path+f"encoder.png")
-            # )
+            tf.keras.utils.plot_model(
+            encoder,
+            show_shapes=True,
+            show_layer_activations = True,
+            expand_nested=True,
+            to_file=os.path.abspath(modality.model_path+f"encoder.png")
+            )
             
             #models[modality_name] = autoencoder
             #del autoencoder, encoder, trainDS, valDS

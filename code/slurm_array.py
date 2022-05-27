@@ -18,25 +18,49 @@ def single_run(index):
     cube = [[[15,15],[60,60],100],[[10,20],[40,60],50]]
 
 
+    classifier_freeze_encoder = [False,True]
+    classifier_multi_dense = [False,True]
+    #classifier_train_batchsize = [2,8,32]#16,
+    classifier_train_epochs = [100,200]#100,
+    classifier_train_learning_rate = [1e-4,1e-5]
+    
+
+
     iterate = list(itertools.product(
                             cube,
                             learning_rate,
-                            modality_name
+                            modality_name,
+                            classifier_freeze_encoder,
+                            classifier_multi_dense,
+                            classifier_train_epochs,
+                            classifier_train_learning_rate
                             ))
 
-    cube_params, learning_rate, modality_name = iterate[index]
+    cube_params, learning_rate, modality_name,classifier_freeze_encoder,classifier_multi_dense,classifier_train_epochs,classifier_train_learning_rate = iterate[index]
     minmax_shape_reduction, minmax_augmentation_percentage,mask_vs_rotation_percentage = cube_params
 
     if modality_name == "ADC":
         epochs = 500
         batch_size = 32
+        classifier_train_batchsize = 32
         reshape_dim = (32,128,96)
     elif modality_name == "t2tsetra":
         epochs = 250
         batch_size = 2
+        classifier_train_batchsize = 2
         reshape_dim = None
 
-    job_name = f"e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}"
+    autoencoder_job_name = f"e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}"
+
+
+    classifier_freeze_encoder = classifier_freeze_encoder
+    classifier_multi_dense = classifier_multi_dense
+    classifier_train_batchsize = classifier_train_batchsize
+    classifier_train_epochs = classifier_train_epochs
+    classifier_test_learning_rate = classifier_train_learning_rate
+    classifier_test_batchsize = classifier_train_batchsize
+
+    job_name = f"e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_cfe{classifier_freeze_encoder}_cdm{classifier_multi_dense}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctralr{classifier_train_learning_rate}_ctesb{classifier_test_batchsize}_cteslr{classifier_test_learning_rate}"
 
     parameters.set_global(
             data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
@@ -47,13 +71,15 @@ def single_run(index):
             learning_rate  = learning_rate,
             minmax_shape_reduction  = minmax_shape_reduction,
             minmax_augmentation_percentage  = minmax_augmentation_percentage,
-            mask_vs_rotation_percentage = mask_vs_rotation_percentage
+            mask_vs_rotation_percentage = mask_vs_rotation_percentage,
+            autoencoder_job_name = autoencoder_job_name
             )
 
     parameters.add_modality(
         modality_name = modality_name, 
-        reshape_dim=reshape_dim,  
-        batch_size=batch_size)
+        reshape_dim=reshape_dim#,  
+        #batch_size=batch_size
+        )
 
     try:
         task_max = int(os.environ['SLURM_ARRAY_TASK_MAX'])
@@ -94,6 +120,16 @@ def merged_run(index):
 
     updowm = [["maxpool","upsample",False,True],["upsample","maxpool",False,True]]#,["maxpool","upsample",True,True]]
 
+    classifier_freeze_encoder = [False,True],
+    classifier_multi_dense = [True,False],
+    #classifier_train_batchsize = [1,2,8],#16,
+    classifier_train_epochs = [100,200],#100,
+    classifier_train_learning_rate = [1e-4,1e-5]
+
+
+    classifier_train_batchsize = 1
+    
+
     # rm /e350_lr0.001_sr15-15_ap60-60_mvsrp100_efFalse_bs1_emupsample_dmmaxpool_cf1024_df1024-64_etmfFalse_dtufTrue/Merged_ADC-t2tsetra/
     # rm /e350_lr0.001_sr15-15_ap60-60_mvsrp100_efFalse_bs1_emmaxpool_dmupsample_cf1024_df1024-64_etmfFalse_dtufTrue/Merged_ADC-t2tsetra/
     # test 128 istedenfor 1024
@@ -103,19 +139,39 @@ def merged_run(index):
                             cube,
                             filters,                        
                             learning_rate,
-                            updowm
+                            updowm,
+                            classifier_freeze_encoder,
+                            classifier_multi_dense,
+                            #classifier_train_batchsize,
+                            classifier_train_epochs,
+                            classifier_train_learning_rate
                             ))
+
+
 
     # for i in range(len(iterate)):
     #     print(iterate[i])
 
-    cube_params,filters,learning_rate, updowm = iterate[index]
+    cube_params,filters,learning_rate, updowm, classifier_freeze_encoder, classifier_multi_dense,  classifier_train_epochs, classifier_train_learning_rate = iterate[index]
     center_filter,decoder_filters = filters
     minmax_shape_reduction, minmax_augmentation_percentage,mask_vs_rotation_percentage = cube_params
     encoder_method, decoder_method, encode_try_maxpool_first, decode_try_upsample_first = updowm
 
         
-    job_name = f"e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}"
+    autoencoder_job_name = f"e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}"
+
+
+    classifier_freeze_encoder = classifier_freeze_encoder
+    classifier_multi_dense = classifier_multi_dense
+    classifier_train_batchsize = classifier_train_batchsize
+    classifier_train_epochs = classifier_train_epochs
+    classifier_test_learning_rate = classifier_train_learning_rate
+    classifier_test_batchsize = classifier_train_batchsize
+
+    job_name = f"e{epochs}_lr{learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{batch_size}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}_cfe{classifier_freeze_encoder}_cdm{classifier_multi_dense}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctralr{classifier_train_learning_rate}_ctesb{classifier_test_batchsize}_cteslr{classifier_test_learning_rate}"
+
+
+
 
     parameters.set_global(
                 data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
@@ -127,7 +183,8 @@ def merged_run(index):
                 minmax_shape_reduction  = minmax_shape_reduction,
                 minmax_augmentation_percentage  = minmax_augmentation_percentage,
                 mask_vs_rotation_percentage = mask_vs_rotation_percentage,
-                batch_size = batch_size
+                batch_size = batch_size,
+                autoencoder_job_name = autoencoder_job_name
                 )
 
 
