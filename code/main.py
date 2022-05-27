@@ -81,7 +81,6 @@ def main(*args, **kwargs):
     else:
         #raise ValueError("Missing slurm_array in kwargs")
 
-        index = 0
             
         for index in range(2):
             backbone_name = "vgg16"
@@ -287,12 +286,20 @@ def main(*args, **kwargs):
             continue
             
         encoder = None
-        if os.path.isdir(modality.model_path+"/encoder/"):
+        classifier = None
+        if os.path.isdir(modality.model_path+"/classifier/"):
+            try:
+                classifier = tf.keras.models.load_model(modality.model_path+"/classifier/", compile=False)
+                print("Loaded model")
+            except:
+                print("Failed to load model")
+                pass
+        if os.path.isdir(modality.model_path+"/encoder/") and not classifier:
+
             try:
                 encoder = tf.keras.models.load_model(modality.model_path+"/encoder/", compile=False)
                 print("Loaded model")
             except:
-                
                 print("Failed to load model")
                 pass
 
@@ -320,7 +327,18 @@ def main(*args, **kwargs):
         #     pandas.DataFrame.to_csv(asd[i], f"asdqwe{i}.csv")
 
         
-        if encoder:
+        if classifier:
+            _, _, y_test, pat_df = split_data(pat_slices, pat_df, autoencoder = False)
+            labels = {}
+            for split in pat_df.split.unique():
+
+                
+                label_split = pat_df.sort_values("pat_idx").drop_duplicates(["Subject ID", "Study Date"]).ClinSig.where(pat_df.split == split).dropna().replace({"non-significant": 0, "significant": 1})
+                #label_split = pat_df.sort_values("pat_idx").drop_duplicates("Subject ID").ClinSig.where(pat_df.split == split).replace({"non-significant": 0, "significant": 1})
+
+                labels[split] = tf.constant(label_split, dtype=tf.int32)
+            evaluate_classifier(classifier, y_test[modality.idx], labels["y_test"])
+        elif encoder:
             y_train, y_val, y_test, pat_df = split_data(pat_slices, pat_df, autoencoder = False)
 
             labels = {}
@@ -332,16 +350,14 @@ def main(*args, **kwargs):
 
                 labels[split] = tf.constant(label_split, dtype=tf.int32)
 
-
-            
         # #print(pat_df.ClinSig)
         #     print(asd)
         #     print()
         #     pandas.DataFrame.to_csv(asd[i], f"asdqwe{i}.csv")
 
 
-            print("y_test",y_test[modality.idx].shape)
-            print("labels y_test",len(labels["y_test"]))
+            # print("y_test",y_test[modality.idx].shape)
+            # print("labels y_test",len(labels["y_test"]))
 
 
             classifier = build_train_classifier(encoder, y_train[modality.idx], y_val[modality.idx], labels)
@@ -358,9 +374,6 @@ def main(*args, **kwargs):
 
         else:
 
-            print("Failed to load model")
-            print("Failed to load model")
-            print("Failed to load model")
             
             y_train, y_val, pat_df = split_data(pat_slices, pat_df, autoencoder = True)
             print(f"\nCurrent parameters:\n{modality.mrkdown()}")
@@ -529,6 +542,11 @@ if __name__ == '__main__':
     try:
         print(f"SLURM_JOB_NAME - {os.environ['SLURM_JOB_NAME']}")
         print(f"SLURM_JOB_ID - {os.environ['SLURM_JOB_ID']}")
+    except:
+        pass
+    try:
+        print(f"SLURM_ARRAY_JOB_ID - {os.environ['SLURM_ARRAY_JOB_ID']}")
+        print(f"SLURM_ARRAY_TASK_ID - {os.environ['SLURM_ARRAY_TASK_ID']}")
     except:
         pass
     print(f"Tensorflow version - {tf.__version__}")

@@ -299,7 +299,6 @@ def train_test_validation(patients_arr, patients_df, ratio):
     x_train, x_test, train_df, test_df = train_test_split(patients_arr , pat_index, train_size=(1-test_ratio), random_state=42, shuffle=True, stratify = label_split)
 
     label_split = patients_df[~patients_df.idx.apply(lambda x: x[0] in test_df)].drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
-
     
     x_train, x_val, train_df, val_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio),random_state=42, shuffle=True, stratify = label_split)
 

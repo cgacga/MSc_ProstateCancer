@@ -1,6 +1,7 @@
 
 ### Model building ###
 import os, time, json, statistics
+from tabnanny import verbose
 import tensorflow as tf
 from tensorflow import keras
 import tensorflow_addons as tfa
@@ -14,7 +15,9 @@ from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from sklearn.utils import resample
 from sklearn.metrics import classification_report
-
+from tensorboard.plugins.custom_scalar import summary as cs_summary
+from tensorboard.plugins.custom_scalar import layout_pb2
+import seaborn as sns
 
 class PlotCallback(tf.keras.callbacks.Callback):
     x_val = None
@@ -495,7 +498,7 @@ def build_train_classifier(encoder, y_train, y_val, labels):
         classifier = Model(inp, out, name=f'{modality.modeltype}_{modality.modality_name}')
 
     opt = tf.keras.optimizers.Adam(learning_rate=modality.classifier_train_learning_rate)
-    loss = tf.keras.losses.BinaryCrossentropy(from_logits=False,name="loss")
+    loss = tf.keras.losses.BinaryCrossentropy(from_logits=False,name="BinaryCrossentropy_loss")
     metrics = tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")
     classifier.compile(opt, loss=loss, metrics=metrics)
 
@@ -554,26 +557,47 @@ def build_train_classifier(encoder, y_train, y_val, labels):
     return classifier
 
 
+def stats(r):
+        alpha = 0.95
+        p = [((1.0-alpha)/2.0) *100,(alpha+((1.0-alpha)/2.0))* 100]
+        average = sum(r) / len(r)
+        std = statistics.stdev(r)
+        # confidence intervals
+        lower_boot = max(0.0,np.percentile(r,p[0]))
+        upper_boot = min(1.0,np.percentile(r,p[1]))
+        return average,std,lower_boot,upper_boot
+
+
 def evaluate_classifier(classifier, y_test, labels):
     
     modality.modeltype = "evaluate_classifier"
 
 
     opt = tf.keras.optimizers.Adam(learning_rate=modality.classifier_test_learning_rate)
-    loss = tf.keras.losses.BinaryCrossentropy(from_logits=False,name="loss")
+    loss = tf.keras.losses.BinaryCrossentropy(from_logits=False,name="BinaryCrossentropy_loss")
     metrics = [
             tf.keras.metrics.BinaryAccuracy(name="accuracy"),
             tf.keras.metrics.Precision(name="precision"),
             tf.keras.metrics.Recall(name="recall"),
-            tfa.metrics.F1Score(num_classes=1, average=None),
-            tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")]
+            #tfa.metrics.F1Score(num_classes=1, average=None),
+            tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC"),
+            tf.keras.metrics.AUC(num_thresholds=200, name = "PR_AUC", curve="PR"),]
 
     classifier.compile(opt, loss=loss, metrics=metrics)
 
 
-    auc_l = list()
-    alpha = 0.95
-    p = ((1.0-alpha)/2.0) *100
+
+
+    # print(cfr_dataframe)
+
+    # print(cfr)
+
+    # modality.cfr = cfr
+
+    # print(modality.mrkdown())
+
+
+    #auc_l = list()
     #if isinstance(y_test, np.ndarray):
     #    n_size = int(y_test[0].shape[0])
     #else:
@@ -584,7 +608,10 @@ def evaluate_classifier(classifier, y_test, labels):
     # print(y_test.shape)
     # print(len(labels))
     # print(labels.shape)
-
+    names = [loss.name,*[metrics[i].name for i in range(len(metrics))],"f1_score"]
+    results = {n:list() for n in names}
+    results_stats = {n:{f"{s}_{n}":list() for s in ["avg","std","lower","upper"]} for n in names}
+    
 
     test_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{modality.modeltype}_test"))
 
@@ -597,57 +624,121 @@ def evaluate_classifier(classifier, y_test, labels):
             
         
         labels_test = resample(labels.numpy(),n_samples = n_size, replace = True,stratify = labels, random_state = i)
+        
+        res = classifier.evaluate(test,labels_test,batch_size = modality.classifier_test_batchsize, verbose = 0)
 
-        results = classifier.evaluate(test,labels_test,batch_size = modality.classifier_test_batchsize)
+        #auc_l.append(res[-1])
+        #print(f"Run: {i}/{n_iterations} - AUC: {res[-1]}")
+        
+        results = {}
+        for n,r in enumerate(res):
+            results[names[n]].append(r)
 
-        auc_l.append(results[-1])
+        results["f1_score"].append((2*results["precision"]*results["recall"])/(results["precision"]+results["recall"]))
+            
+        if i >1:
+            
+            # stat = {}
+            # for k,v in results.items():
+            #     s = stats(v)
+            #     for i,rsk in enumerate(results_stats[k].keys()):
+            #         results_stats[k][rsk].append(s[i])
+            #     #stat[f"avg_{k}"], stat[f"std_{k}"], stat[f"lower_{k}"], stat[f"upper_{k}"] = stats(results[k])
+                
+            
+            with test_writer.as_default():
+                for key, value in results.items():
+                    #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value[-1],i)
+                    tf.summary.scalar(f"{modality.modeltype}/{key}",value[-1],i)
+                    s = stats(value)
+                    for i,k in enumerate(results_stats[key].keys()):
+                        results_stats[key][k].append(s[i])
+                    #for k, v in results_stats[key].items():
+                        #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{k}",s[i],i)
+                        tf.summary.scalar(f"{modality.modeltype}/{k}",s[i],i)
+                test_writer.flush()
 
-        print(f"Run: {i}/{n_iterations} - AUC: {results[-1]}")
-        del results, test, labels_test, a
+            print(f"\n{i}/{n_iterations}")
+            [print([f'{key} {value[-1]:.1f} - {" - ".join([f"{k[:-len(key)-1]} {v[-1]:.1f}"for k, v in results_stats[key].items()])}'][0])for key, value in results.items()][0]
 
-        average_auc = sum(auc_l) / len(auc_l)
-
-        std_auc = statistics.stdev(auc_l)
-
-        # confidence intervals
-
-        lower_boot = max(0.0,np.percentile(auc_l,p))
-
-        p = (alpha+((1.0-alpha)/2.0))* 100
-
-        upper_boot = min(1.0,np.percentile(auc_l,p))
-
-        results["avg_AUC"] = average_auc
-        results["std_AUC"] = std_auc
-        results["lower_boot"] = lower_boot
-        results["upper_boot"] = upper_boot
-
-        with test_writer.as_default():
-            for key, value in results.items():
-                tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value,i)
-            test_writer.flush()
-
-
-            # with test_writer.as_default():
-            #     for key, value in results.items():
-            #         for name in modality.merged_modalities:
-            #             if key.startswith(name):
-            #                 tf.summary.scalar(f"{name}/{modality.modeltype}_{key[len(name)+1:]}",value,i)
-            #         if key.startswith("loss"):
-            #             tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_global_{key}",value,i)
-            #     test_writer.flush()
-
-    print("Average and std AUC",average_auc,std_auc)
-
-    print('%.1f confidence interval %.1f%% and %.1f%%' %(alpha*100,lower_boot*100,upper_boot*100))
+        del results, test, labels_test
 
 
 
     prediction = classifier.predict([y_test],batch_size = modality.classifier_test_batchsize)
+    
+    cfr = classification_report(labels.numpy(),np.argmax(prediction,axis=1),target_names=["non-significant","significant"], output_dict=True)   
 
-    y_pred_bool = np.argmax(prediction,axis=1)
+    figure = plt.figure()
+    sns.set(font_scale=1.2)
+    sns.heatmap(pd.DataFrame(cfr).T, annot=True, annot_kws={"size": 16})
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close(figure)
+    buf.seek(0)
+    # Convert PNG buffer to TF image
+    image = tf.image.decode_png(buf.getvalue(), channels=4)
+    # Add the batch dimension
+    image = tf.expand_dims(image, 0)
     
 
+    modality.results = results
+    modality.results_stats = results_stats    
+    modality.cfr = cfr
+    description = modality.mrkdown()
 
-    print(classification_report(labels.argmax(axis=1),y_pred_bool))
+    with test_writer.as_default():
+            tf.summary.image(modality.job_name+f"_img/conf_{modality.modality_name}_{modality.modeltype}", image, step=i, description=description)
+            test_writer.flush()
+
+    with test_writer.as_default():
+        tf.summary.text(modality.job_name+f"_txt/{modality.modality_name}_{modality.modeltype}", description, step=n_iterations+1, description=modality.model_name)
+        test_writer.flush()
+
+
+    with test_writer.as_default():
+        tf.summary.experimental.write_raw_pb(
+            create_layout_summary(results,results_stats,modality.modeltype).SerializeToString(), step=0
+        )
+
+
+
+def create_layout_summary(results,results_stats,model_type):
+    return cs_summary.pb(
+        layout_pb2.Layout(
+            category=[[
+                layout_pb2.Category(
+                    title=key,
+                    chart=[
+                            layout_pb2.Chart(
+                                title=key,
+                                margin=layout_pb2.MarginChartContent(
+                                    series=[
+                                        layout_pb2.MarginChartContent.Series(
+                                            value=f"{model_type}/{key}",
+                                            lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
+                                            upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        [
+                        layout_pb2.Chart(
+                            title=k,
+                            margin=layout_pb2.MarginChartContent(
+                                series=[
+                                    layout_pb2.MarginChartContent.Series(
+                                        value=f"{model_type}/{k}",
+                                        lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
+                                        upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
+                                    ),
+                                ],
+                            ),
+                        ),
+                    ]for k in results_stats[key].keys() if not k.startswith("upper") or not k.startswith("lower")
+                    ],
+                )
+            ]for key in results.keys()],
+        ),
+    )
 
