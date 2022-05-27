@@ -721,8 +721,7 @@ def create_layout_summary(results,results_stats,model_type):
                                         ),
                                     ],
                                 ),
-                            ),
-                        [
+                        ),*[[
                         layout_pb2.Chart(
                             title=k,
                             margin=layout_pb2.MarginChartContent(
@@ -735,8 +734,7 @@ def create_layout_summary(results,results_stats,model_type):
                                 ],
                             ),
                         ),
-                    ]for k in results_stats[key].keys() if not k.startswith("upper") or not k.startswith("lower")
-                    ],
+                    ]for k in results_stats[key].keys() if not k.startswith("upper") or not k.startswith("lower")]],
                 )
             ]for key in results.keys()],
         ),
