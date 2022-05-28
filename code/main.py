@@ -284,21 +284,25 @@ def main(*args, **kwargs):
         parameters.set_current(modality_name)
         if modality.skip_modality:
             continue
+
+        print("job name ",modality.job_name)
             
         encoder = None
         classifier = None
-        model_path = os.path.abspath(f"../models_test/{modality.autoencoder_job_name}/{modality.modality_name}/")+"/"
-        if os.path.isdir(model_path+"/classifier/"):
+        model_path = os.path.abspath(f"../models/{modality.autoencoder_job_name}/{modality.modality_name}/")+"/"
+
+        print("autoencoder_model_path ", model_path)
+        if os.path.isdir(os.path.abspath(model_path+"/classifier/")):
             try:
-                classifier = tf.keras.models.load_model(model_path+"/classifier/", compile=False)
+                classifier = tf.keras.models.load_model(os.path.abspath(model_path+"/classifier/"), compile=False)
                 print("Loaded model")
             except:
                 print("Failed to load model")
                 pass
-        if os.path.isdir(model_path+"/encoder/") and not classifier:
+        if os.path.isdir(os.path.abspath(model_path+"/encoder/")) and not classifier:
 
             try:
-                encoder = tf.keras.models.load_model(model_path+"/encoder/", compile=False)
+                encoder = tf.keras.models.load_model(os.path.abspath(model_path+"/encoder/"), compile=False)
                 print("Loaded model")
             except:
                 print("Failed to load model")

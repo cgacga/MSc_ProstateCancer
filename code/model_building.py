@@ -344,6 +344,9 @@ def get_unet_model(modality_name="autoencoder"):
             os.makedirs(modality.model_path)
 
 
+    if not os.path.exists(modality.model_path):
+        os.makedirs(modality.model_path)
+
     tf.keras.utils.plot_model(
         autoencoder,
         show_shapes=True,
@@ -502,6 +505,8 @@ def build_train_classifier(encoder, y_train, y_val, labels):
     metrics = tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")
     classifier.compile(opt, loss=loss, metrics=metrics)
 
+    if not os.path.exists(modality.model_path):
+        os.makedirs(modality.model_path)
     
     tf.keras.utils.plot_model(
         classifier,
@@ -633,10 +638,12 @@ def evaluate_classifier(classifier, y_test, labels):
         #results = {}
         for n,r in enumerate(res):
             results[names[n]].append(r)
-
-        results["f1_score"].append((2*results["precision"][-1]*results["recall"][-1])/(results["precision"][-1]+results["recall"][-1]))
+        try:
+            results["f1_score"].append((2*results["precision"][-1]*results["recall"][-1])/(results["precision"][-1]+results["recall"][-1]))
+        except:
+            pass
             
-        if i >1:
+        if len(results["f1_score"]) >1:
             
             # stat = {}
             # for k,v in results.items():
@@ -650,7 +657,7 @@ def evaluate_classifier(classifier, y_test, labels):
                 for key, value in results.items():
                     #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value[-1],i)
                     tf.summary.scalar(f"{modality.modeltype}/{key}",value[-1],i)
-                    s = stats(value[-1])
+                    s = stats(value)
                     for index,k in enumerate(results_stats[key].keys()):
                         results_stats[key][k].append(s[index])
                     #for k, v in results_stats[key].items():

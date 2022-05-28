@@ -67,12 +67,19 @@ def single_run(index):
             job_name = job_name,
             encoder_freeze = encoder_freeze,
             decoder_block_type = decoder_block_type, 
-            epochs = epochs,
-            learning_rate  = learning_rate,
             minmax_shape_reduction  = minmax_shape_reduction,
             minmax_augmentation_percentage  = minmax_augmentation_percentage,
             mask_vs_rotation_percentage = mask_vs_rotation_percentage,
-            autoencoder_job_name = autoencoder_job_name
+            autoencoder_job_name = autoencoder_job_name,
+            classifier_freeze_encoder = classifier_freeze_encoder,
+            classifier_multi_dense = classifier_multi_dense,
+            classifier_train_batchsize = classifier_train_batchsize,
+            classifier_train_epochs = classifier_train_epochs,
+            classifier_test_learning_rate = classifier_test_learning_rate,
+            classifier_test_batchsize = classifier_test_batchsize,
+            autoencoder_batchsize = batch_size,
+            autoencoder_learning_rate = learning_rate,
+            autoencoder_epocs = epochs
             )
 
     parameters.add_modality(
@@ -120,10 +127,10 @@ def merged_run(index):
 
     updowm = [["maxpool","upsample",False,True],["upsample","maxpool",False,True]]#,["maxpool","upsample",True,True]]
 
-    classifier_freeze_encoder = [False,True],
-    classifier_multi_dense = [True,False],
+    classifier_freeze_encoder = [False,True]
+    classifier_multi_dense = [True,False]
     #classifier_train_batchsize = [1,2,8],#16,
-    classifier_train_epochs = [100,200],#100,
+    classifier_train_epochs = [100,200]#100,
     classifier_train_learning_rate = [1e-4,1e-5]
 
 
@@ -178,13 +185,19 @@ def merged_run(index):
                 job_name = job_name,
                 encoder_freeze = encoder_freeze,
                 decoder_block_type = decoder_block_type, 
-                epochs = epochs,
-                learning_rate  = learning_rate,
+                autoencoder_epocs = epochs,
                 minmax_shape_reduction  = minmax_shape_reduction,
                 minmax_augmentation_percentage  = minmax_augmentation_percentage,
                 mask_vs_rotation_percentage = mask_vs_rotation_percentage,
-                batch_size = batch_size,
-                autoencoder_job_name = autoencoder_job_name
+                autoencoder_job_name = autoencoder_job_name,
+            classifier_freeze_encoder = classifier_freeze_encoder,
+            classifier_multi_dense = classifier_multi_dense,
+            classifier_train_batchsize = classifier_train_batchsize,
+            classifier_train_epochs = classifier_train_epochs,
+            classifier_test_learning_rate = classifier_test_learning_rate,
+            classifier_test_batchsize = classifier_test_batchsize,
+            autoencoder_batchsize = batch_size,
+            autoencoder_learning_rate = learning_rate
                 )
 
 
@@ -210,20 +223,20 @@ def merged_run(index):
 
     parameters.set_current("Merged")
     
-    model = get_merged_model()
+    # model = get_merged_model()
 
-    if not os.path.exists(modality.model_path):
-        os.makedirs(modality.model_path)
+    # if not os.path.exists(modality.model_path):
+    #     os.makedirs(modality.model_path)
 
-    tf.keras.utils.plot_model(
-    model,
-    show_shapes=True,
-    show_layer_activations = True,
-    expand_nested=True,
-    to_file=os.path.abspath(modality.model_path+f"autoencoder.png")
-    )
+    # tf.keras.utils.plot_model(
+    # model,
+    # show_shapes=True,
+    # show_layer_activations = True,
+    # expand_nested=True,
+    # to_file=os.path.abspath(modality.model_path+f"autoencoder.png")
+    # )
 
-    tf.keras.backend.clear_session()
+    # tf.keras.backend.clear_session()
 
 
 
