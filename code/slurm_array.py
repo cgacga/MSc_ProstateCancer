@@ -128,13 +128,14 @@ def merged_run(index):
     updowm = [["maxpool","upsample",False,True],["upsample","maxpool",False,True]]#,["maxpool","upsample",True,True]]
 
     classifier_freeze_encoder = [False,True]
-    classifier_multi_dense = [True,False]
+    classifier_multi_dense = [False,True]
     #classifier_train_batchsize = [1,2,8],#16,
-    classifier_train_epochs = [100,200]#100,
+    #classifier_train_epochs = [100,200]#100,
     classifier_train_learning_rate = [1e-4,1e-5]
 
 
     classifier_train_batchsize = 1
+    classifier_train_epochs = 200
     
 
     # rm /e350_lr0.001_sr15-15_ap60-60_mvsrp100_efFalse_bs1_emupsample_dmmaxpool_cf1024_df1024-64_etmfFalse_dtufTrue/Merged_ADC-t2tsetra/
@@ -143,14 +144,15 @@ def merged_run(index):
     filters = [[512,(256, 128, 64, 32, 16)],[1024,(512, 256, 128, 64, 32)],[256,(256, 128, 64, 32, 16)]]#,[512,(512,256, 128, 64, 32)]
 
     iterate = list(itertools.product(
-                            cube,
+                            
                             filters,                        
                             learning_rate,
                             updowm,
+                            cube,
                             classifier_freeze_encoder,
                             classifier_multi_dense,
                             #classifier_train_batchsize,
-                            classifier_train_epochs,
+                            #classifier_train_epochs,
                             classifier_train_learning_rate
                             ))
 
@@ -159,7 +161,7 @@ def merged_run(index):
     # for i in range(len(iterate)):
     #     print(iterate[i])
 
-    cube_params,filters,learning_rate, updowm, classifier_freeze_encoder, classifier_multi_dense,  classifier_train_epochs, classifier_train_learning_rate = iterate[index]
+    filters,learning_rate, updowm,cube_params, classifier_freeze_encoder, classifier_multi_dense,  classifier_train_learning_rate = iterate[index]
     center_filter,decoder_filters = filters
     minmax_shape_reduction, minmax_augmentation_percentage,mask_vs_rotation_percentage = cube_params
     encoder_method, decoder_method, encode_try_maxpool_first, decode_try_upsample_first = updowm

@@ -494,11 +494,22 @@ def build_train_classifier(encoder, y_train, y_val, labels):
     
     classifier = Model(encoder.input, x,name=f'{modality.modeltype}_{modality.modality_name}')
     
-    if encoder.input.shape[-1] != 1:
-        inp = layers.Input(shape=(*encoder.input.shape[1:-1],1))
-        l1 = layers.Conv3D(3, (1, 1, 1))(inp) # map N channels data to 3 channels
-        out = classifier(l1)
-        classifier = Model(inp, out, name=f'{modality.modeltype}_{modality.modality_name}')
+    if isinstance(encoder.input,list):
+        input_layers = []
+        conv_layers = []
+        if any([inp.shape[-1] >1 for inp in encoder.input]):
+            for in_ in encoder.input:
+                input_ = layers.Input(shape=(*in_.shape[1:-1],1), name =in_.name)
+                input_layers.append(input_)
+                conv_layers.append(layers.Conv3D(3, (1, 1, 1))(input_))
+            
+            classifier = Model(input_layers,classifier(conv_layers))
+    else:
+        if encoder.input.shape[-1] != 1:
+            inp = layers.Input(shape=(*encoder.input.shape[1:-1],1))
+            l1 = layers.Conv3D(3, (1, 1, 1))(inp) # map N channels data to 3 channels
+            out = classifier(l1)
+            classifier = Model(inp, out, name=f'{modality.modeltype}_{modality.modality_name}')
 
     opt = tf.keras.optimizers.Adam(learning_rate=modality.classifier_train_learning_rate)
     loss = tf.keras.losses.BinaryCrossentropy(from_logits=False,name="BinaryCrossentropy_loss")
