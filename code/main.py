@@ -97,9 +97,9 @@ def main(*args, **kwargs):
         for index in range(2):
             
             encoder_weights = None #[None,"imagenet"]
-            self_superviced = True #[True,False]
+            self_superviced = False #[True,False]
             
-            classifier_train_epochs : int = 500
+            classifier_train_epochs : int = 50#500
 
             #IKKE classifier_freeze_encoder
             #hvis self_superviced = true
@@ -108,7 +108,7 @@ def main(*args, **kwargs):
             autoencoder_learning_rate = [1e-3, 1e-4]
             cube = [[[15,15],[60,60],100],[[10,20],[40,60],50]]
 
-            center_filter = 512
+            center_filter = 256
             decoder_filters = (256, 128, 64, 32, 16)
             encoder_method, decoder_method, encode_try_maxpool_first, decode_try_upsample_first = ["upsample","maxpool",False,True]
             #test *,*,True,*whatever]
@@ -129,14 +129,14 @@ def main(*args, **kwargs):
 
             if modality_name == "ADC":
                 autoencoder_epocs = 500
-                autoencoder_batchsize = 32
+                autoencoder_batchsize = 1
                 reshape_dim = (32,128,96)
                 skip_modality = False
                 classifier_train_batchsize : int = 32#16,
                 classifier_test_batchsize : int = 32
             elif modality_name == "t2tsetra":
-                autoencoder_epocs = 250
-                autoencoder_batchsize = 2
+                autoencoder_epocs = 150#250
+                autoencoder_batchsize = 1
                 reshape_dim = None
                 skip_modality = False
                 classifier_train_batchsize : int = 2#16,
@@ -146,20 +146,16 @@ def main(*args, **kwargs):
 
             # job_name=f"ss{self_superviced}_e{autoencoder_epocs}_lr{autoencoder_learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_bs{autoencoder_batchsize}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}_imagenet{encoder_weights}"
 
-            job_name = f"ss{self_superviced}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctesb{classifier_test_batchsize}_cteslr"
+            job_name = f"ss{self_superviced}_ae{autoencoder_epocs}_abs{autoencoder_batchsize}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctesb{classifier_test_batchsize}_cteslr"
 
 
 
-            MERGED_autoencoder_batchsize = 1
-            MERGED_autoencoder_epocs = 350
             #is not used when ss = False
 
 
             parameters.set_global(
                     data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
                     job_name = job_name,
-                    autoencoder_batchsize = MERGED_autoencoder_batchsize,
-                    autoencoder_epocs = MERGED_autoencoder_epocs,
                     autoencoder_learning_rate  = autoencoder_learning_rate,
                     minmax_shape_reduction  = minmax_shape_reduction,
                     minmax_augmentation_percentage  = minmax_augmentation_percentage,
@@ -172,7 +168,8 @@ def main(*args, **kwargs):
                 job_name = job_name,
                 modality_name = modality_name, 
                 reshape_dim=reshape_dim,  
-                autoencoder_batchsize=autoencoder_batchsize,
+                autoencoder_batchsize = autoencoder_batchsize,
+                autoencoder_epocs = autoencoder_epocs,
                 skip_modality=skip_modality,
                 classifier_train_batchsize = classifier_train_batchsize,
                 classifier_train_epochs = classifier_train_epochs,
@@ -187,10 +184,12 @@ def main(*args, **kwargs):
         classifier_train_batchsize : int = 2
         classifier_train_epochs : int = 100
         classifier_test_batchsize : int = 2
+        autoencoder_batchsize = 1
+        autoencoder_epocs = 100
 
         # job_name=f"ss{self_superviced}_e{MERGED_autoencoder_epocs}_lr{autoencoder_learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_bs{MERGED_autoencoder_batchsize}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}_imagenet{encoder_weights}"
 
-        job_name = f"ss{self_superviced}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctesb{classifier_test_batchsize}_cteslr"
+        job_name = f"ss{self_superviced}_ae{autoencoder_epocs}_abs{autoencoder_batchsize}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctesb{classifier_test_batchsize}_cteslr"
 
         parameters.join_modalities(
                 ["ADC", "t2tsetra"],
@@ -203,7 +202,9 @@ def main(*args, **kwargs):
                 job_name = job_name,
                 classifier_train_batchsize = classifier_train_batchsize,
                 classifier_train_epochs = classifier_train_epochs,
-                classifier_test_batchsize = classifier_test_batchsize)
+                classifier_test_batchsize = classifier_test_batchsize,
+                autoencoder_batchsize = autoencoder_batchsize,
+                autoencoder_epocs = autoencoder_epocs)
 
         #modality_names = ["ADC", "t2tsetra"]
         #parameters.insert_param(f"Merged_{'-'.join(modality_names)}","job_name", job_name)
