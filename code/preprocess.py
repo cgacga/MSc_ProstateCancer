@@ -268,7 +268,7 @@ def normalize(patients_arr,patients_df):
     return patients_arr
 
 
-def train_test_validation(patients_arr, patients_df, ratio):
+def train_test_validation(patients_array, patients_dataframe, ratio):
     """
     The function takes in the image array and dataframe and the split ratio.
     It then splits the array into training, test and validation sets and updates the dataframe.
@@ -280,10 +280,12 @@ def train_test_validation(patients_arr, patients_df, ratio):
     :param validation_ratio: Ratio of training data
     :return: training, test and validation sets.
     """
-    old_pat_index = patients_df.idx.apply(lambda x: x[0]).unique()
+    old_pat_index = patients_dataframe.idx.apply(lambda x: x[0]).unique()
+    patients_df=patients_dataframe.copy()
     patients_df=patients_df[~patients_df['ClinSig'].isna()].copy()
     pat_index = patients_df.idx.apply(lambda x: x[0]).unique()
     #patients_arr = patients_arr[patients_df.idx.apply(lambda x: x[0]).unique()]
+    patients_arr = patients_array.copy()
     patients_arr = patients_arr[pat_index]
     
 

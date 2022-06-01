@@ -47,7 +47,7 @@ def img_pltsave(data, savepath="", tensorboard=False):
 
     aspect_ratio = data_shape[1] / data_shape[2]
     #aspect_ratio = data_shape[0] / data_shape[1]
-    size_multiplier = 2
+    size_multiplier = 5
     nrow = rows_data*aspect_ratio*size_multiplier
     ncol = columns_data*size_multiplier
     figure, axarr = plt.subplots(

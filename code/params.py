@@ -45,11 +45,12 @@ class parameters(object):
                 minmax_augmentation_percentage : tuple = [10,15],
                 mask_vs_rotation_percentage : int = 50,
                 classifier_freeze_encoder : bool = False,
-                classifier_multi_dense : bool = True,
+                classifier_multi_dense : bool = False,
                 classifier_train_batchsize : int = 16,#16,
                 classifier_train_epochs : int = 100,
                 classifier_test_batchsize : int = 16,
-                autoencoder_job_name = str):
+                autoencoder_job_name = str,
+                self_superviced = True):
         self = parameters()
         #Global parameters
         self.__class__.data_path = data_path
@@ -77,6 +78,7 @@ class parameters(object):
         #self.optimizer = tensorflow.optimizers.Adam()
 
         self.modeltype = str
+        self.self_superviced = self_superviced
 
         self.autoencoder_learning_rate = autoencoder_learning_rate
         self.autoencoder_epocs = autoencoder_epocs
@@ -148,7 +150,7 @@ class parameters(object):
                 #raise KeyError(f"{key} not a valid key, must be part of {_g.__dict__.keys()}")
                 raise KeyError(f"{key} not a valid key. Check the spelling, valid keynames are: {*_g.add_modality.__annotations__.keys(),*_g.set_global.__annotations__.keys()}")
         
-        missing = [key for key, x in _g.__dict__.items() if x == None and key != 'reshape_dim' and key != 'gpus']
+        missing = [key for key, x in _g.__dict__.items() if x == None and key != 'reshape_dim' and key != 'gpus' and key != 'encoder_weights']
         if missing:
             raise KeyError(f"Missing value for: {missing}")
         else:
@@ -175,7 +177,7 @@ class parameters(object):
     def insert_param(modality_name, key, value):
         parameters.lst[modality_name][key] = value
 
-    def join_modalities(modality_names: list, encoder_method = "maxpool",decoder_method = "upsample", decoder_filters = (256, 128, 64, 32, 16), center_filter = 1024, decode_try_upsample_first = True, encode_try_maxpool_first = True):
+    def join_modalities(modality_names: list, encoder_method = "maxpool",decoder_method = "upsample", decoder_filters = (256, 128, 64, 32, 16), center_filter = 1024, decode_try_upsample_first = True, encode_try_maxpool_first = True,**kwargs):
         up = ["upsample","transpose","padd"]
         down = ["maxpool","avgpool","reshape", "crop"]
         if len(decoder_filters) != 5:
@@ -190,7 +192,7 @@ class parameters(object):
         #_g.model_name = f"{_g.modality_name}_{_g.job_name}_{_g.dtime}"
         reshape_dim = tuple([parameters.tags[modality_name] for modality_name in modality_names])
 
-        parameters.add_modality(modality_name, reshape_dim, merged_modalities = modality_names, encoder_method=encoder_method, decoder_method=decoder_method, decoder_filters=decoder_filters, center_filter=center_filter, merged=True, decode_try_upsample_first = decode_try_upsample_first, encode_try_maxpool_first = encode_try_maxpool_first,same_shape=False)
+        parameters.add_modality(modality_name, reshape_dim, merged_modalities = modality_names, encoder_method=encoder_method, decoder_method=decoder_method, decoder_filters=decoder_filters, center_filter=center_filter, merged=True, decode_try_upsample_first = decode_try_upsample_first, encode_try_maxpool_first = encode_try_maxpool_first,same_shape=False,**kwargs)
 
         # for modality_name in modality_names:
         #     for key, value in parameters.lst[modality_name].items():

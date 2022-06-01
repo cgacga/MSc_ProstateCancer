@@ -295,7 +295,7 @@ def train_model(model, trainDS, valDS):
         # x=train_data,
         trainDS,
         validation_data = valDS,
-        epochs = modality.epochs,
+        epochs = modality.autoencoder_epocs,
         #batch_size=batch_size,
         verbose=2,
         
@@ -378,8 +378,8 @@ def get_unet_model(modality_name="autoencoder"):
     opt = tf.keras.optimizers.Adam(learning_rate=modality.autoencoder_learning_rate)
     loss = tf.keras.losses.MeanSquaredError(name="loss")
     metrics = [
-        tf.keras.metrics.MeanSquaredError(name='MSE'),
-        tf.keras.metrics.MeanAbsoluteError(name='MAE')
+        tf.keras.metrics.MeanSquaredError(name='mse'),
+        tf.keras.metrics.MeanAbsoluteError(name='mae')
     ]
 
     autoencoder.compile(opt, loss=loss, metrics=metrics)
@@ -461,7 +461,8 @@ def model_building(trainDS, valDS):
         #model.save(save_path)   
         #model.save_weights(os.path.join(savepath,modality))
 
-    model = train_model(model, trainDS, valDS)
+    if modality.self_superviced:
+        model = train_model(model, trainDS, valDS)
 
     #TODO: save images from recreation, with noisy and clean included (use more than 5 images in the plot)
         
@@ -529,8 +530,8 @@ def build_train_classifier(encoder, y_train, y_val, labels):
 
 
     if isinstance(y_train, np.ndarray):
-        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)},labels["y_train"]))
-        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)},labels["y_val"]))
+        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}":y for i,y in enumerate(y_train)},labels["y_train"]))
+        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}":y for i,y in enumerate(y_val)},labels["y_val"]))
 
     else:
         train_loader = tf.data.Dataset.from_tensor_slices((y_train, labels["y_train"]))
@@ -654,7 +655,7 @@ def evaluate_classifier(classifier, y_test, labels):
         except:
             pass
             
-        if len(results["f1_score"]) >1:
+        if i >1:
             
             # stat = {}
             # for k,v in results.items():
@@ -667,6 +668,11 @@ def evaluate_classifier(classifier, y_test, labels):
             with test_writer.as_default():
                 for key, value in results.items():
                     #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value[-1],i)
+                    
+
+                    if key == "f1_score":
+                      if len(results["f1_score"]) <2:
+                          continue
                     tf.summary.scalar(f"{modality.modeltype}/{key}",value[-1],i)
                     s = stats(value)
                     for index,k in enumerate(results_stats[key].keys()):
@@ -677,15 +683,22 @@ def evaluate_classifier(classifier, y_test, labels):
                 test_writer.flush()
 
             print(f"\n{i}/{n_iterations}")
-            [print([f'{key} {value[-1]:.1f} - {" - ".join([f"{k[:-len(key)-1]} {v[-1]:.1f}"for k, v in results_stats[key].items()])}'][0])for key, value in results.items()][0]
+            try:
+                [print([f'{key} {value[-1]:.1f} - {" - ".join([f"{k[:-len(key)-1]} {v[-1]:.1f}"for k, v in results_stats[key].items()])}'][0])for key, value in results.items()][0]
+            except:
+                pass
 
         del test, labels_test, res
 
 
-
-    prediction = classifier.predict([y_test],batch_size = modality.classifier_test_batchsize)
+        
+    if isinstance(y_test, np.ndarray):
+        prediction = classifier.predict([y for y in y_test],batch_size = modality.classifier_test_batchsize)
+    else:
+        prediction = classifier.predict([y_test],batch_size = modality.classifier_test_batchsize)
     
     cfr = classification_report(labels.numpy(),np.argmax(prediction,axis=1),target_names=["non-significant","significant"], output_dict=True)   
+
 
     figure = plt.figure()
     #sns.set(font_scale=1.2)
@@ -718,6 +731,9 @@ def evaluate_classifier(classifier, y_test, labels):
         tf.summary.experimental.write_raw_pb(
             create_layout_summary(results,results_stats,modality.modeltype).SerializeToString(), step=0
         )
+
+
+    print(classification_report(labels.numpy(),np.argmax(prediction,axis=1),target_names=["non-significant","significant"]))
 
 def create_layout_summary(results,results_stats,model_type):
     charts = [[
