@@ -25,7 +25,7 @@ def keras_augment(images,ksizes,depth,channels):
             layers.Permute(dims=(2,3,1,4)),
             layers.Reshape((ksizes[0],ksizes[1],depth*channels)),
 
-            #layers.RandomFlip("horizontal_and_vertical"),
+            layers.RandomFlip("horizontal_and_vertical"),
             #layers.RandomFlip("horizontal"),
             layers.RandomRotation(factor=0.08333,fill_mode="constant",fill_value=0),
             #2 * pi * (0.1 rad) = 36 deg
@@ -254,9 +254,13 @@ def augment_build_datasets(y_train,y_val):
         # val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
 
 
-        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
+        # train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
 
-        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
+        # val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
+
+        train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}":augment_patches(y) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
+
+        val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}":augment_patches(y) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
 
         # tl_x = {}
         # tl_y = {}

@@ -19,7 +19,9 @@ def rename_all_layers(model, suffix):
         new_name =  f'{old_name}_{suffix}'
         old_nodes = list(model._network_nodes)
         new_nodes = []
-        for i,l in enumerate(model.layers):                
+        for i,l in enumerate(model.layers): 
+            if l.name.startswith("input"):
+                continue               
             if l.name == old_name:
                 l._name = new_name
                 new_nodes.append(new_name + _get_node_suffix(old_name))
@@ -235,7 +237,7 @@ def build_merged_unet(
         n_upsample_blocks=5,
         classes=1,
         activation='sigmoid',
-        use_batchnorm=True,
+        use_batchnorm=False,
         dropout=None,
 ):
     if decoder_block_type == 'upsampling':
@@ -280,8 +282,9 @@ def build_merged_unet(
             # x = decoder_block(decoder_filters[i], stage=i, use_batchnorm=use_batchnorm)(x, skip)
             
 
-    if dropout:
-        x = layers.SpatialDropout3D(dropout, name='pyramid_dropout')(x)
+    
+    def xdropout(x, name_suffix=""):
+        return layers.SpatialDropout3D(modality.dropout, name=f'{name_suffix}_pyramid_dropout')(x)
 
 
     def final_conv(x, name_suffix=""):
@@ -302,6 +305,8 @@ def build_merged_unet(
 
     if modality.same_shape:
     #if False:
+        if modality.dropout:
+            x = xdropout(x,name_suffix="SameShape")
         x = final_conv(x, name_suffix="SameShape")
         if modality.classes > 1:
             model = Model(input_, activation_final(x, name_suffix=modality.activation))
@@ -311,6 +316,9 @@ def build_merged_unet(
             model = Model(input_, [activation_final(x, name_suffix=f"{name}") for name in modality.merged_modalities])
             #model = Model(input_, x)
     else:
+        if modality.dropout:
+            a = xdropout(a, name_suffix=f"{modality.merged_modalities[0]}")
+            t = xdropout(t, name_suffix=f"{modality.merged_modalities[1]}")
         a = final_conv(a, name_suffix=f"{modality.merged_modalities[0]}")
         a = activation_final(a, name_suffix=f"{modality.merged_modalities[0]}")
         t = final_conv(t, name_suffix=f"{modality.merged_modalities[1]}")
@@ -334,7 +342,13 @@ def get_merged_model():
         # dims = modality.reshape_dim[i] if modality.reshape_dim[i] != None else modality.image_shape[i]
         dims = modality.image_shape[i] if isinstance(modality.image_shape[i], tuple) else modality.reshape_dim[i]
             
-        model = sm.Unet(modality.backbone_name, input_shape=(dims[0],dims[1],dims[2],3), encoder_weights=modality.encoder_weights, encoder_freeze = modality.encoder_freeze)
+        model = sm.Unet(
+            modality.backbone_name, 
+            input_shape=(dims[0],dims[1],dims[2],3), 
+            encoder_weights=modality.encoder_weights, 
+            encoder_freeze = modality.encoder_freeze,
+            decoder_use_batchnorm = modality.batchnorm,
+            dropout = modality.dropout)
         
         encoder = Model(model.input, model.get_layer(sm.Backbones.get_feature_layers(modality.backbone_name, n=1)[0]).output,name=f'encoder_{modality_name}')     
 
@@ -351,6 +365,16 @@ def get_merged_model():
             enc = max_out
         else: enc = min_out
 
+    if modality.merge_method == "concat":
+        merge_method = layers.Concatenate(axis=-1)
+    elif modality.merge_method == "add":
+        merge_method = layers.Add()
+    elif modality.merge_method == "avg":
+        merge_method = layers.Average()
+    elif modality.merge_method == "max":
+        merge_method = layers.Maximum()
+    elif modality.merge_method == "multiply":
+        merge_method = layers.Multiply()
     
     def firstmaxpool(encoders):
         x = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(encoders[enc].output)
@@ -360,13 +384,18 @@ def get_merged_model():
 
         mod = upsizedown(enc_copy, modality.encoder_method)
 
-        concat = layers.Concatenate(axis=-1)([(enc_copy[key].output if key not in mod.keys() else mod[key]) for key in enc_copy.keys()])
+        #concat = layers.Concatenate(axis=-1)([(enc_copy[key].output if key not in mod.keys() else mod[key]) for key in enc_copy.keys()])
+        concat = merge_method([(enc_copy[key].output if key not in mod.keys() else mod[key]) for key in enc_copy.keys()])
+        
         encoders = enc_copy.copy()
         return concat
 
     def fistconcat(encoders):
         mod = upsizedown(encoders, modality.encoder_method)
-        concat = layers.Concatenate(axis=-1)([(encoders[key].output if key not in mod.keys() else mod[key]) for key in encoders.keys()])
+
+        #concat = layers.Concatenate(axis=-1)([(encoders[key].output if key not in mod.keys() else mod[key]) for key in encoders.keys()])
+        concat = merge_method([(encoders[key].output if key not in mod.keys() else mod[key]) for key in encoders.keys()])
+
         concat = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(concat)
         return concat
 
@@ -402,6 +431,6 @@ def get_merged_model():
                     n_upsample_blocks = 5, 
                     classes = modality.classes, 
                     activation = modality.activation, 
-                    use_batchnorm = True, 
-                    dropout = None
+                    use_batchnorm = modality.batchnorm, 
+                    dropout = modality.dropout
                     )

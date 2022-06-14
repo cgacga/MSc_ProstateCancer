@@ -290,6 +290,9 @@ def train_test_validation(patients_array, patients_dataframe, ratio):
     
 
     print(f"\n{'Splitting'.center(50, '.')}")
+    n_removed = len(pat_index)-len(old_pat_index)#len(patients_df.idx.apply(lambda x: x[0]))
+    if n_removed:
+        print(f"\nRemoved {n_removed} patients without labels")
     train_ratio,validation_ratio,test_ratio = ratio
     # splitting the data into training, test and validation sets
     #x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=(1-test_ratio), random_state=42, shuffle=True)
@@ -297,6 +300,14 @@ def train_test_validation(patients_array, patients_dataframe, ratio):
 
     label_split = patients_df.drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
 
+    if modality.bootpercentage != 1:
+        patients_arr, _, bootpercentage, _ = train_test_split(patients_arr , pat_index, train_size=modality.bootpercentage, random_state=42, shuffle=True, stratify = label_split)
+        patients_df = patients_df[~patients_df.idx.apply(lambda x: x[0] not in bootpercentage)]
+        label_split = patients_df.drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
+        print(f"Selected bootpercentage = {modality.bootpercentage*100:.0f}% \nRemoved {len(pat_index)-len(patients_arr)} ")
+        pat_index = patients_df.idx.apply(lambda x: x[0]).unique()
+
+    print(f"{len(patients_arr)} Patients left after removal")
 
     x_train, x_test, train_df, test_df = train_test_split(patients_arr , pat_index, train_size=(1-test_ratio), random_state=42, shuffle=True, stratify = label_split)
 
@@ -311,9 +322,9 @@ def train_test_validation(patients_array, patients_dataframe, ratio):
     
     patients_df[["split","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
 
-    n_removed = len(pat_index)-len(old_pat_index)#len(patients_df.idx.apply(lambda x: x[0]))
-    if n_removed:
-        print(f"\nRemoved {n_removed} patients without labels")
+    # n_removed = len(pat_index)-len(old_pat_index)#len(patients_df.idx.apply(lambda x: x[0]))
+    # if n_removed:
+    #     print(f"\nRemoved {n_removed} patients without labels")
         
     print(f"\n|\tTrain\t|\tVal\t|\tTest\t|")
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|")

@@ -84,6 +84,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
 
         for i in range(self.nimages):
             img = self.model.predict([tf.repeat(tf.expand_dims(xval[i],0),3,-1) for xval in self.__class__.x_val])
+            #img = self.model.predict([tf.expand_dims(xval[i],0) for xval in self.__class__.x_val])
             for j in range(len(img)):
                 pred_sample[j][i] = img[j]
 
@@ -137,9 +138,12 @@ class PlotCallback(tf.keras.callbacks.Callback):
                 for key, value in train_logs.items():
                     for name in modality.merged_modalities:
                         if key.startswith(name):
-                            tf.summary.scalar(f"{name}/{self.modeltype}_{key[len(name)+1:]}",value,self.epoch)
+                            tf.summary.scalar(f"{name}/{self.modality_name}_{self.modeltype}_{key[len(name)+1:]}",value,self.epoch)
                     if key.startswith("loss"):
                         tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_global_{key}",value,self.epoch)
+                    else:
+                        tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_{key}",value,self.epoch)
+
                     
                     #if key != "learning_rate":
                     #    tf.summary.scalar(f"{modality.modality_name}/train_{key}",value,self.epoch)#
@@ -151,9 +155,12 @@ class PlotCallback(tf.keras.callbacks.Callback):
                     key = key[4:]
                     for name in modality.merged_modalities:
                         if key.startswith(name):
-                            tf.summary.scalar(f"{name}/{self.modeltype}_{key[len(name)+1:]}",value,self.epoch)
+                            tf.summary.scalar(f"{name}/{self.modality_name}_{self.modeltype}_{key[len(name)+1:]}",value,self.epoch)
                     if key.startswith("loss"):
                         tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_global_{key}",value,self.epoch)#
+                    else:
+                        tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_{key}",value,self.epoch)#
+
                     #key = key[4:]  # Remove 'val_' prefix.
                     #tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
                     #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
@@ -326,6 +333,7 @@ def get_unet_model(modality_name="autoencoder"):
     #autoencoder = sm.Unet("vgg16", input_shape=(dim[0], dim[1], dim[2],3), encoder_weights="imagenet")
 
     modality.modeltype = "autoencoder"
+    modality.results = modality.results_stats = modality.cfr = None
 
     if modality.merged:
         autoencoder = get_merged_model()
@@ -338,22 +346,21 @@ def get_unet_model(modality_name="autoencoder"):
             classes = modality.classes,# 1,
             encoder_freeze = modality.encoder_freeze,# False,
             decoder_block_type = modality.decoder_block_type,# "transpose",
-            activation = modality.activation)# "sigmoid")
+            activation = modality.activation,
+            decoder_use_batchnorm = modality.batchnorm,
+            dropout = modality.dropout)# "sigmoid")
 
-        if not os.path.exists(modality.model_path):
-            os.makedirs(modality.model_path)
+    if modality.self_superviced:
+        if not os.path.exists(modality.AE_path):
+            os.makedirs(modality.AE_path)
 
-
-    if not os.path.exists(modality.model_path):
-        os.makedirs(modality.model_path)
-
-    tf.keras.utils.plot_model(
-        autoencoder,
-        show_shapes=True,
-        show_layer_activations = True,
-        expand_nested=True,
-        to_file=os.path.abspath(modality.model_path+f"{modality.modeltype}.png")
-        )
+        tf.keras.utils.plot_model(
+            autoencoder,
+            show_shapes=True,
+            show_layer_activations = True,
+            expand_nested=True,
+            to_file=os.path.abspath(modality.AE_path+f"{modality.modeltype}.png")
+            )
     #https://github.com/ZFTurbo/segmentation_models_3D/blob/master/segmentation_models_3D/models/unet.py#L166
 
     #TODO: sbatch variable for learning_rate
@@ -376,7 +383,7 @@ def get_unet_model(modality_name="autoencoder"):
 
 
     opt = tf.keras.optimizers.Adam(learning_rate=modality.autoencoder_learning_rate)
-    loss = tf.keras.losses.MeanSquaredError(name="loss")
+    loss = tf.keras.losses.MeanSquaredError(name="loss_mse")
     metrics = [
         tf.keras.metrics.MeanSquaredError(name='mse'),
         tf.keras.metrics.MeanAbsoluteError(name='mae')
@@ -385,7 +392,7 @@ def get_unet_model(modality_name="autoencoder"):
     autoencoder.compile(opt, loss=loss, metrics=metrics)
 
 
-    print(autoencoder.summary())
+    #print(autoencoder.summary())
 
     
 
@@ -476,6 +483,7 @@ def model_building(trainDS, valDS):
 def build_train_classifier(encoder, y_train, y_val, labels):
     
     modality.modeltype = "classifier"
+    modality.results = modality.results_stats = modality.cfr = None
 
     
     if modality.classifier_freeze_encoder:
@@ -517,16 +525,7 @@ def build_train_classifier(encoder, y_train, y_val, labels):
     metrics = tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC")
     classifier.compile(opt, loss=loss, metrics=metrics)
 
-    if not os.path.exists(modality.model_path):
-        os.makedirs(modality.model_path)
-    
-    tf.keras.utils.plot_model(
-        classifier,
-        show_shapes=True,
-        show_layer_activations = True,
-        expand_nested=True,
-        to_file=os.path.abspath(modality.model_path+f"{modality.modeltype}.png")
-        )
+
 
 
     if isinstance(y_train, np.ndarray):
@@ -569,7 +568,16 @@ def build_train_classifier(encoder, y_train, y_val, labels):
         callbacks = [pltcallback],
     )
     
-    classifier.save(modality.model_path+"/classifier/")
+    classifier.save(modality.C_path)
+
+
+    tf.keras.utils.plot_model(
+        classifier,
+        show_shapes=True,
+        show_layer_activations = True,
+        expand_nested=True,
+        to_file=os.path.abspath(modality.C_path+f"{modality.modeltype}.png")
+        )
     
     return classifier
 
@@ -588,6 +596,7 @@ def stats(r):
 def evaluate_classifier(classifier, y_test, labels):
     
     modality.modeltype = "evaluate_classifier"
+    modality.results = modality.results_stats = modality.cfr = None
 
 
     opt = tf.keras.optimizers.Adam(learning_rate=modality.classifier_test_learning_rate)
@@ -597,8 +606,8 @@ def evaluate_classifier(classifier, y_test, labels):
             tf.keras.metrics.Precision(name="precision"),
             tf.keras.metrics.Recall(name="recall"),
             #tfa.metrics.F1Score(num_classes=1, average=None),
-            tf.keras.metrics.AUC(num_thresholds=200, name = "ROC_AUC", curve="ROC"),
-            tf.keras.metrics.AUC(num_thresholds=200, name = "PR_AUC", curve="PR"),]
+            tf.keras.metrics.AUC(name = "ROC_AUC", curve="ROC"),
+            tf.keras.metrics.AUC(name = "PR_AUC", curve="PR")]
 
     classifier.compile(opt, loss=loss, metrics=metrics)
 
@@ -620,7 +629,7 @@ def evaluate_classifier(classifier, y_test, labels):
     #else:
     #    n_size = int(y_test.shape[0])
     n_size = len(labels)
-    n_iterations = modality.classifier_test_Nbootstrap
+    n_iterations = modality.Nbootstrap_steps
 
     # print(y_test.shape)
     # print(len(labels))
@@ -630,7 +639,7 @@ def evaluate_classifier(classifier, y_test, labels):
     results_stats = {n:{f"{s}_{n}":list() for s in ["avg","std","lower","upper"]} for n in names}
     
 
-    test_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{modality.modeltype}_test"))
+    evaluate_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{modality.modeltype}_eval"))
 
     for i in range(1,n_iterations+1):
         #a = np.random.randint(1,20000)
@@ -665,7 +674,7 @@ def evaluate_classifier(classifier, y_test, labels):
             #     #stat[f"avg_{k}"], stat[f"std_{k}"], stat[f"lower_{k}"], stat[f"upper_{k}"] = stats(results[k])
                 
             
-            with test_writer.as_default():
+            with evaluate_writer.as_default():
                 for key, value in results.items():
                     #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value[-1],i)
                     
@@ -680,37 +689,46 @@ def evaluate_classifier(classifier, y_test, labels):
                     #for k, v in results_stats[key].items():
                         #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{k}",s[i],i)
                         tf.summary.scalar(f"{modality.modeltype}/{k}",s[index],i)
-                test_writer.flush()
+                evaluate_writer.flush()
 
             print(f"\n{i}/{n_iterations}")
             try:
-                [print([f'{key} {value[-1]:.1f} - {" - ".join([f"{k[:-len(key)-1]} {v[-1]:.1f}"for k, v in results_stats[key].items()])}'][0])for key, value in results.items()][0]
+                [print([f'{key} {value[-1]:.2f} - {" - ".join([f"{k[:-len(key)-1]} {v[-1]:.2f}"for k, v in results_stats[key].items()])}'][0])for key, value in results.items()][0]
             except:
                 pass
 
-        del test, labels_test, res
 
 
+            
+        if isinstance(y_test, np.ndarray):
+            prediction = classifier.predict([y for y in test],batch_size = modality.classifier_test_batchsize)
+        else:
+            prediction = classifier.predict([test],batch_size = modality.classifier_test_batchsize)
         
-    if isinstance(y_test, np.ndarray):
-        prediction = classifier.predict([y for y in y_test],batch_size = modality.classifier_test_batchsize)
-    else:
-        prediction = classifier.predict([y_test],batch_size = modality.classifier_test_batchsize)
-    
-    cfr = classification_report(labels.numpy(),np.argmax(prediction,axis=1),target_names=["non-significant","significant"], output_dict=True)   
+        #cfr = classification_report(labels.numpy(),np.argmax(prediction,axis=1),target_names=["non-significant","significant"], output_dict=True)   
 
 
-    figure = plt.figure()
-    #sns.set(font_scale=1.2)
-    sns.heatmap(pd.DataFrame(cfr).T, annot=True, annot_kws={"size": 16})
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close(figure)
-    buf.seek(0)
-    # Convert PNG buffer to TF image
-    image = tf.image.decode_png(buf.getvalue(), channels=4)
-    # Add the batch dimension
-    image = tf.expand_dims(image, 0)
+        cfr = classification_report(labels_test,np.round(prediction),zero_division=0, output_dict=True)   
+
+        figure = plt.figure()
+        sns.set(font_scale=0.8)
+        sns.heatmap(pd.DataFrame(cfr).T, annot=True, annot_kws={"size": 14}, vmin=0.0, vmax=1.0)
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close(figure)
+        buf.seek(0)
+        image = tf.image.decode_png(buf.getvalue(), channels=4)
+        image = tf.expand_dims(image, 0)
+
+
+        with evaluate_writer.as_default():
+                tf.summary.image(modality.job_name+f"_img/conf_{modality.modality_name}_{modality.modeltype}", image, step=i)
+                evaluate_writer.flush()
+
+        print(classification_report(labels_test,np.round(prediction),target_names=["non-significant","significant"]))
+
+
+        del test, labels_test, res
     
 
     modality.results = results
@@ -718,22 +736,17 @@ def evaluate_classifier(classifier, y_test, labels):
     modality.cfr = cfr
     description = modality.mrkdown()
 
-    with test_writer.as_default():
-            tf.summary.image(modality.job_name+f"_img/conf_{modality.modality_name}_{modality.modeltype}", image, step=i, description=description)
-            test_writer.flush()
 
-    with test_writer.as_default():
+    with evaluate_writer.as_default():
         tf.summary.text(modality.job_name+f"_txt/{modality.modality_name}_{modality.modeltype}", description, step=n_iterations+1, description=modality.model_name)
-        test_writer.flush()
+        evaluate_writer.flush()
 
 
-    with test_writer.as_default():
+    with evaluate_writer.as_default():
         tf.summary.experimental.write_raw_pb(
             create_layout_summary(results,results_stats,modality.modeltype).SerializeToString(), step=0
         )
 
-
-    print(classification_report(labels.numpy(),np.argmax(prediction,axis=1),target_names=["non-significant","significant"]))
 
 def create_layout_summary(results,results_stats,model_type):
     charts = [[

@@ -28,7 +28,7 @@ class parameters(object):
                 backbone_name : str = "vgg16", #resnet18
                 classes : int = 1,
                 activation : str = "sigmoid",
-                encoder_weights : str = "imagenet",
+                encoder_weights : str = None, #"imagenet"
                 encoder_freeze : bool = False,
                 decoder_block_type : str = "upsampling", #transpose
                 autoencoder_epocs : int = 100,
@@ -38,8 +38,8 @@ class parameters(object):
                 #loss : str = "mse",
                 #metrics : list[str] = ["mse", "mae"],
                 autoencoder_learning_rate : float = 1e-4,
-                classifier_train_learning_rate : float = 1e-4,
-                classifier_test_learning_rate : float = 1e-4,
+                classifier_train_learning_rate : float = 1e-5,
+                classifier_test_learning_rate : float = 1e-5,
                 no_adjacent : bool = False,
                 minmax_shape_reduction : tuple = [5,15],
                 minmax_augmentation_percentage : tuple = [10,15],
@@ -49,8 +49,11 @@ class parameters(object):
                 classifier_train_batchsize : int = 16,#16,
                 classifier_train_epochs : int = 100,
                 classifier_test_batchsize : int = 16,
-                autoencoder_job_name = str,
-                self_superviced = True):
+                self_superviced = True,
+                batchnorm = True,
+                dropout = None,
+                bootpercentage = 1,
+                merge_method = "avg"):
         self = parameters()
         #Global parameters
         self.__class__.data_path = data_path
@@ -83,6 +86,9 @@ class parameters(object):
         self.autoencoder_learning_rate = autoencoder_learning_rate
         self.autoencoder_epocs = autoencoder_epocs
         self.autoencoder_batchsize = autoencoder_batchsize
+        self.batchnorm = batchnorm
+        self.dropout = dropout
+        self.merge_method = merge_method
 
         self.classifier_freeze_encoder = classifier_freeze_encoder
         self.classifier_multi_dense = classifier_multi_dense
@@ -92,9 +98,9 @@ class parameters(object):
 
         self.classifier_test_learning_rate = classifier_test_learning_rate
         self.classifier_test_batchsize = classifier_test_batchsize
-        self.classifier_test_Nbootstrap=100
+        self.Nbootstrap_steps = 100
+        self.bootpercentage = bootpercentage
 
-        self.autoencoder_job_name = autoencoder_job_name
 
         #self.learning_rate = learning_rate 
         #Data augmentation parameters
@@ -150,15 +156,47 @@ class parameters(object):
                 #raise KeyError(f"{key} not a valid key, must be part of {_g.__dict__.keys()}")
                 raise KeyError(f"{key} not a valid key. Check the spelling, valid keynames are: {*_g.add_modality.__annotations__.keys(),*_g.set_global.__annotations__.keys()}")
         
-        missing = [key for key, x in _g.__dict__.items() if x == None and key != 'reshape_dim' and key != 'gpus' and key != 'encoder_weights']
+        missing = [key for key, x in _g.__dict__.items() if x == None and key != 'reshape_dim' and key != 'gpus' and key != 'encoder_weights' and key != "dropout" and key != "job_name"]
         if missing:
             raise KeyError(f"Missing value for: {missing}")
         else:
             #_g.learning_rate = _g.learning_rate*[_g.n_gpus if _g.n_gpus>0 else 1][0]
             #_g.optimizer.lr.assign(_g.learning_rate)
-            _g.model_path = os.path.abspath(f"../models/{_g.job_name}/{modality_name}/")+"/"
+            #_g.model_path = os.path.abspath(f"../models/{_g.job_name}/{modality_name}/")+"/"
+            
+            root_path = f"{_g.job_name+'_' if _g.job_name else ''}selfsupervised_{_g.self_superviced}/"
+                        
+            C_name = f"/CTRlr{_g.classifier_train_learning_rate}_CTRfe{_g.classifier_freeze_encoder}_CTRmd{_g.classifier_multi_dense}_CTRbs{_g.classifier_train_batchsize}_CTRe{_g.classifier_train_epochs}/"
+              
+            C_eval_name = f"/CElr{_g.classifier_test_learning_rate}_CEbs{_g.classifier_test_batchsize}_CEbp{_g.bootpercentage}"
+
+            #if _g.self_superviced:
+            AE_name = []
+            AE_name.append(f"AEw{_g.encoder_weights}_AElr{_g.autoencoder_learning_rate}_AEbn{_g.batchnorm}_AEd{_g.dropout}_AEsr{'-'.join(map(str, _g.minmax_shape_reduction))}_AEap{'-'.join(map(str, _g.minmax_augmentation_percentage))}_AEmvrp{_g.mask_vs_rotation_percentage}")
+            AE_name.append(f"{modality_name}_AEe{_g.autoencoder_epocs}_AEbs{_g.autoencoder_batchsize}")
+          
+            if _g.merged:
+              m_suffix = f"_AEem{_g.encoder_method}_AEdm{_g.decoder_method}_AEcf{_g.center_filter}_AEetmf{_g.encode_try_maxpool_first}_AEdtuf{_g.decode_try_upsample_first}_AEdf{_g.decoder_filters[0]}-{_g.decoder_filters[-1]}_AEmm{_g.merge_method}"
+              AE_name[-1] = AE_name[-1]+m_suffix
+            
+            
+            _g.AE_path = os.path.abspath(f'../models/{root_path+"/".join(AE_name)}/encoder/')
+
+            _g.C_path = os.path.abspath(f'../models/{root_path+"/".join(AE_name)+C_name}/classifier/')
+            _g.tensorboard_path = os.path.abspath(f'../tensorboard/{root_path+"/".join(AE_name)+C_name+C_eval_name}')
+            _g.job_name = root_path+"/".join(AE_name)+C_name+C_eval_name
+
+            # else:
+            #   _g.AE_path = os.path.abspath(f'../models/{root_path+C_name}/encoder/')
+            #   _g.C_path = os.path.abspath(f'../models/{root_path+C_name}/classifier/')
+            #   _g.tensorboard_path = os.path.abspath(f"../tensorboard/{root_path+C_name+C_eval_name}")
+
+            #   _g.job_name = root_path+C_name+C_eval_name
+
+
+            #_g.autoencoder_path = os.path.abspath(f"../models/{_g.job_name}/{modality_name}/")+"/"
             #_g.tensorboard_path = os.path.abspath(f"../tb_logs/{_g.job_name}/{_g.dtime}")+"/"#/{modality_name}")+"/"
-            _g.tensorboard_path = os.path.abspath(f"../tensorboard/{_g.job_name}/{modality_name}")+"/"#/{modality_name}_{_g.dtime}")+"/"
+            #_g.tensorboard_path = os.path.abspath(f"../tensorboard/{_g.job_name}/{modality_name}")+"/"#/{modality_name}_{_g.dtime}")+"/"
             parameters.lst[modality_name] = _g.__dict__
             #if not merged:
             if not _g.merged:
@@ -177,22 +215,25 @@ class parameters(object):
     def insert_param(modality_name, key, value):
         parameters.lst[modality_name][key] = value
 
-    def join_modalities(modality_names: list, encoder_method = "maxpool",decoder_method = "upsample", decoder_filters = (256, 128, 64, 32, 16), center_filter = 1024, decode_try_upsample_first = True, encode_try_maxpool_first = True,**kwargs):
+    def join_modalities(modality_names: list, encoder_method = "maxpool",decoder_method = "upsample", decoder_filters = (256, 128, 64, 32, 16), center_filter = 512, decode_try_upsample_first = True, encode_try_maxpool_first = True,merge_method="avg",**kwargs):
         up = ["upsample","transpose","padd"]
         down = ["maxpool","avgpool","reshape", "crop"]
+        m_method = ["concat","avg","add","max","multiply"]
         if len(decoder_filters) != 5:
           raise ValueError("decoder_filters must be a list of 5 elements")
         if encoder_method  not in (up+down):
           raise ValueError(f"encoder_method: {encoder_method} must be one of {up+down}")
         if decoder_method  not in (up+down):
           raise ValueError(f"decoder_method: {decoder_method} must be one of {up+down}")
+        if merge_method not in m_method:
+          raise ValueError(f"Merge method: {merge_method} not supported, must be of {m_method}")
         #_g = copy.deepcopy(parameters._g)
         #modality_name = f"Merged_{'_'.join(modality_names)}_"
         modality_name = f"Merged_{'-'.join(modality_names)}"
         #_g.model_name = f"{_g.modality_name}_{_g.job_name}_{_g.dtime}"
         reshape_dim = tuple([parameters.tags[modality_name] for modality_name in modality_names])
 
-        parameters.add_modality(modality_name, reshape_dim, merged_modalities = modality_names, encoder_method=encoder_method, decoder_method=decoder_method, decoder_filters=decoder_filters, center_filter=center_filter, merged=True, decode_try_upsample_first = decode_try_upsample_first, encode_try_maxpool_first = encode_try_maxpool_first,same_shape=False,**kwargs)
+        parameters.add_modality(modality_name, reshape_dim, merged_modalities = modality_names, encoder_method=encoder_method, decoder_method=decoder_method, decoder_filters=decoder_filters, center_filter=center_filter, merged=True, decode_try_upsample_first = decode_try_upsample_first, encode_try_maxpool_first = encode_try_maxpool_first,same_shape=False,merge_method=merge_method,**kwargs)
 
         # for modality_name in modality_names:
         #     for key, value in parameters.lst[modality_name].items():

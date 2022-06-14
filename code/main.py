@@ -72,7 +72,9 @@ def main(*args, **kwargs):
     #if "index" in kwargs:
         index = int(kwargs["index"])
 
-        if slurm_array == "single":
+        if slurm_array == "all":
+            all(index)
+        elif slurm_array == "single":
             single_run(index)
         elif slurm_array == "merged":
             # if index >96:
@@ -90,6 +92,11 @@ def main(*args, **kwargs):
             #   merged_run(index)
         elif slurm_array == "samesize":
             samesize_run(index)
+
+        elif slurm_array == "singlefalse":
+            single_run_ssFALSE(index)
+        elif slurm_array == "mergedfalse":
+            merged_run_ssFALSE(index)
     else:
         #raise ValueError("Missing slurm_array in kwargs")
 
@@ -97,18 +104,18 @@ def main(*args, **kwargs):
         for index in range(2):
             
             encoder_weights = None #[None,"imagenet"]
-            self_superviced = False #[True,False]
+            self_superviced = True #[True,False]
             
             classifier_train_epochs : int = 50#500
 
             #IKKE classifier_freeze_encoder
-            #hvis self_superviced = true
+            #hvis self_superviced = False
 
             modality_name = ["ADC","t2tsetra"]       
             autoencoder_learning_rate = [1e-3, 1e-4]
             cube = [[[15,15],[60,60],100],[[10,20],[40,60],50]]
 
-            center_filter = 256
+            center_filter = 1024
             decoder_filters = (256, 128, 64, 32, 16)
             encoder_method, decoder_method, encode_try_maxpool_first, decode_try_upsample_first = ["upsample","maxpool",False,True]
             #test *,*,True,*whatever]
@@ -128,19 +135,25 @@ def main(*args, **kwargs):
             
 
             if modality_name == "ADC":
-                autoencoder_epocs = 500
-                autoencoder_batchsize = 1
+                autoencoder_epocs = 35#100
+                autoencoder_batchsize = 32
                 reshape_dim = (32,128,96)
                 skip_modality = False
-                classifier_train_batchsize : int = 32#16,
-                classifier_test_batchsize : int = 32
+                classifier_train_batchsize = 32
+                classifier_train_epochs = 35
+                classifier_test_batchsize = 32
+                bootpercentage = 1
+                merge_method = "avg"
             elif modality_name == "t2tsetra":
-                autoencoder_epocs = 150#250
-                autoencoder_batchsize = 1
+                autoencoder_epocs = 35#250
+                autoencoder_batchsize = 2
                 reshape_dim = None
                 skip_modality = False
-                classifier_train_batchsize : int = 2#16,
-                classifier_test_batchsize : int = 2
+                classifier_train_batchsize = 2
+                classifier_train_epochs = 35
+                classifier_test_batchsize = 2
+                bootpercentage = 1
+                merge_method = "avg"
 
             # job_name = f"e{autoencoder_epocs}_lr{autoencoder_learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_bs{autoencoder_batchsize}_imagenet{encoder_weights}"
 
@@ -182,10 +195,10 @@ def main(*args, **kwargs):
         # job_name = f"e{autoencoder_epocs}_lr{autoencoder_learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ef{encoder_freeze}_bs{autoencoder_batchsize}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}"
 
         classifier_train_batchsize : int = 2
-        classifier_train_epochs : int = 100
+        classifier_train_epochs : int = 35
         classifier_test_batchsize : int = 2
         autoencoder_batchsize = 1
-        autoencoder_epocs = 100
+        autoencoder_epocs = 35
 
         # job_name=f"ss{self_superviced}_e{MERGED_autoencoder_epocs}_lr{autoencoder_learning_rate}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_bs{MERGED_autoencoder_batchsize}_em{encoder_method}_dm{decoder_method}_cf{center_filter}_df{decoder_filters[0]}-{decoder_filters[-1]}_etmf{encode_try_maxpool_first}_dtuf{decode_try_upsample_first}_imagenet{encoder_weights}"
 
@@ -328,27 +341,28 @@ def main(*args, **kwargs):
         if modality.skip_modality:
             continue
 
-        print("job name ",modality.job_name)
+        print(modality.job_name)
             
         encoder = None
         classifier = None
-        model_path = os.path.abspath(f"../models/{modality.autoencoder_job_name}/{modality.modality_name}/")+"/"
+        #model_path = os.path.abspath(f"../models/{modality.autoencoder_job_name}/{modality.modality_name}/")+"/"
 
-        print("autoencoder_model_path ", model_path)
-        if os.path.isdir(os.path.abspath(modality.model_path+"/classifier/")):
+        #print("autoencoder_model_path ", model_path)
+        
+        #if os.path.isdir(os.path.abspath(modality.model_path+"/classifier/")):
+        if os.path.isdir(modality.C_path):
+
             try:
-                classifier = tf.keras.models.load_model(os.path.abspath(modality.model_path+"/classifier/"), compile=False)
-                print("Loaded model")
+                classifier = tf.keras.models.load_model(modality.C_path, compile=False)
+                print(f"Loaded Classifier from {modality.C_path}")
             except:
-                print("Failed to load model")
                 pass
-        if os.path.isdir(os.path.abspath(model_path+"/encoder/")) and not classifier:
-
+        #if os.path.isdir(os.path.abspath(model_path+"/encoder/")) and not classifier:
+        if os.path.isdir(modality.AE_path) and not classifier:
             try:
-                encoder = tf.keras.models.load_model(os.path.abspath(model_path+"/encoder/"), compile=False)
-                print("Loaded model")
+                encoder = tf.keras.models.load_model(modality.AE_path, compile=False)
+                print(f"Loaded Encoder from {modality.AE_path}")
             except:
-                print("Failed to load model")
                 pass
 
 
@@ -427,20 +441,24 @@ def main(*args, **kwargs):
             y_train, y_val, patients_df = split_data(pat_slices, pat_df, autoencoder = True)
             #print(f"\nCurrent parameters:\n{modality.mrkdown()}")
         
-            trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
+            if modality.self_superviced:
+                trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
+            else:
+                trainDS, valDS = None,None
 
             autoencoder = model_building(trainDS, valDS)
 
             encoder = Model(autoencoder.input, autoencoder.get_layer("center_block2_relu").output,name=f'encoder_{modality.modality_name}')
 
-            encoder.save(modality.model_path+"/encoder/")
+            #encoder.save(modality.model_path+"/encoder/")
+            encoder.save(modality.AE_path)
 
             tf.keras.utils.plot_model(
             encoder,
             show_shapes=True,
             show_layer_activations = True,
             expand_nested=True,
-            to_file=os.path.abspath(modality.model_path+f"encoder.png")
+            to_file=os.path.abspath(modality.AE_path+f"encoder.png")
             )
 
             del y_train, y_val, trainDS, valDS, autoencoder
