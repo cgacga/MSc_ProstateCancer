@@ -169,7 +169,6 @@ def merged_run(index):
 
 
     self_superviced = True#[True,False]
-    #autoencoder
     encoder_weights = [None,"imagenet"]
     cube = [[[15,15],[60,60],100],[[10,20],[60,90],50]]
     center_filter = 512
@@ -177,11 +176,9 @@ def merged_run(index):
     updown = [["upsample","maxpool",False,True],["maxpool","upsample",True,True]]
     merge_method = ["concat","avg","add","max","multiply"]
 
-    #test
     classifier_freeze_encoder = [False]#[False,True]
     classifier_multi_dense = [False]#[False,True]
     
-    #eval
     bootpercentage = [1,0.1,0.2,0.5]
 
     #160
@@ -211,8 +208,8 @@ def merged_run(index):
             autoencoder_epocs = 70,
             autoencoder_batchsize = 1,
             classifier_train_epochs = 35,
-            classifier_train_batchsize = 2, #TEST MED 2 +++
-            classifier_test_batchsize = 2,  #TEST MED 2 +++
+            classifier_train_batchsize = 2,
+            classifier_test_batchsize = 2, 
 
             bootpercentage = bootpercentage,
             classifier_freeze_encoder = classifier_freeze_encoder,
@@ -221,8 +218,6 @@ def merged_run(index):
             minmax_shape_reduction  = minmax_shape_reduction,
             minmax_augmentation_percentage  = minmax_augmentation_percentage,
             mask_vs_rotation_percentage = mask_vs_rotation_percentage
-            
-            
             )
 
 

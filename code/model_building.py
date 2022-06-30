@@ -24,18 +24,11 @@ class PlotCallback(tf.keras.callbacks.Callback):
 
     def __init__(self):
         self.modeltype = modality.modeltype
-        #self.x_val = PlotCallback.x_val#self.__class__.x_val
-        #self.file_writer = tb_callback._val_writer
-        #self.x_val = x_val
+        
         self.epoch = 0
-        #self.savepath = f"../tb_logs/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/{os.environ['SLURM_JOB_NAME']}_{modality}"
-        #self.savepath = modality.tensorboard_path
-
-        #self.savename = f"{modality.modality_name}_{modality.dtime}"
+        
         self.savename = f"{modality.modality_name}_{self.modeltype}"
         
-        #modality.model_name
-        #f"{modality.job_name}_{modality.modality_name}_{modality.time}"
 
         self.epoch_modulo = modality.tensorboard_img_epoch
         self.nimages = modality.tensorboard_num_predictimages
@@ -44,21 +37,10 @@ class PlotCallback(tf.keras.callbacks.Callback):
         self.model_name = modality.model_name
         self.modality_name = modality.modality_name
 
-        #logdir = os.path.abspath(self.savepath) #opp ^ (fra params)
-        
-        #self.path = os.path.abspath(os.path.join(modality.tensorboard_path,f"../"))
-        #self.file_writer = tf.summary.create_file_writer(logdir=modality.tensorboard_path)
-        #self.file_writer = tf.summary.create_file_writer(logdir=path)
         self.train_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{self.modeltype}_train"))
         self.val_writer = tf.summary.create_file_writer(logdir=os.path.join(modality.tensorboard_path,f"{self.modeltype}_val"))
         #self.file_writer = self.val_writer
 
-
-
-        # if isinstance(self.__class__.x_val, list):
-        #     self.plotting = self.plot_merged_predictions
-        # else:
-        #     self.plotting = self.plot_predictions
         
     def plot_predictions(self):
         
@@ -128,10 +110,6 @@ class PlotCallback(tf.keras.callbacks.Callback):
         train_logs = {k: v for k, v in logs.items() if not k.startswith('val_')}
         val_logs = {k: v for k, v in logs.items() if k.startswith('val_')}
 
-        # for key in logs:
-        #     with self.file_writer.as_default():
-        #         tf.summary.scalar(f"{modality.model_name}/{key}", logs[key], step=self.epoch, description=f"{key}_{modality.model_name}") 
-        #         self.file_writer.flush()   
 
         if train_logs:
             with self.train_writer.as_default():
@@ -144,10 +122,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
                     else:
                         tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_{key}",value,self.epoch)
 
-                    
-                    #if key != "learning_rate":
-                    #    tf.summary.scalar(f"{modality.modality_name}/train_{key}",value,self.epoch)#
-                    #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
+
                 self.train_writer.flush()
         if val_logs:
             with self.val_writer.as_default():
@@ -161,9 +136,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
                     else:
                         tf.summary.scalar(f"{self.modality_name}/{self.modeltype}_{key}",value,self.epoch)#
 
-                    #key = key[4:]  # Remove 'val_' prefix.
-                    #tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
-                    #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
+
                 self.val_writer.flush()
 
         
@@ -171,40 +144,7 @@ class PlotCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs={}):           
         self.epoch = epoch+1     
 
-        #lr = tf.keras.backend.eval(self.model.optimizer.lr)
-        #logs.update({'learning_rate': lr})
-        
-        
-        # train_logs = {k: v for k, v in logs.items() if not k.startswith('val_')}
-        # val_logs = {k: v for k, v in logs.items() if k.startswith('val_')}
 
-        # # for key in logs:
-        # #     with self.file_writer.as_default():
-        # #         tf.summary.scalar(f"{modality.model_name}/{key}", logs[key], step=self.epoch, description=f"{key}_{modality.model_name}") 
-        # #         self.file_writer.flush()   
-
-        # if train_logs:
-        #     with self.train_writer.as_default():
-        #         for key, value in train_logs.items():
-        #             tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
-        #             #if key != "learning_rate":
-        #             #    tf.summary.scalar(f"{modality.modality_name}/train_{key}",value,self.epoch)#
-        #             #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
-        #         self.train_writer.flush()
-        # if val_logs:
-        #     with self.val_writer.as_default():
-        #         for key, value in val_logs.items():
-        #             tf.summary.scalar(f"{modality.modality_name}/{key[4:]}",value,self.epoch)#
-        #             #key = key[4:]  # Remove 'val_' prefix.
-        #             #tf.summary.scalar(f"{modality.modality_name}/{key}",value,self.epoch)#
-        #             #summary_ops_v2.scalar('epoch_' + name, value, step=epoch)
-        #         self.val_writer.flush()
-        
-        #if self.epoch%self.epoch_modulo==0:
-            # if isinstance(self.__class__.x_val, list):
-            #     self.plot_merged_predictions()
-            # else:
-            #     self.plot_predictions()
         
         
         if isinstance(self.__class__.x_val, list):
@@ -241,59 +181,12 @@ def train_model(model, trainDS, valDS):
     :param valDS: Validation data
     :return: The trained model.
     """
-    #print("\n"+f"{model.name} - training started".center(50, '.'))
-    print("\n"+f"{modality.model_name} - training started".center(50, '.'))
-    #print("\n"+f"{settings.current.model_name} - training started".center(50, '.'))
-
-
-    #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/"
     
-    #checkpoint_cb = keras.callbacks.ModelCheckpoint(os.path.join(savepath,f"checkpoint_cb/{model.name}-checkpoint.h5"), save_best_only=True)
+    print("\n"+f"{modality.model_name} - training started".center(50, '.'))
 
     early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_loss", patience=15)
 
-    #batch_size = 2
-    
 
-    # train_data = train_data.batch(batch_size)
-    # val_data = val_data.batch(batch_size)
-    # # Disable AutoShard.
-    # options = tf.data.Options()
-    # options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
-    # train_data = train_data.with_options(options)
-    # val_data = val_data.with_options(options)
-    
-
-    # from tensorflow.python.ops.numpy_ops import np_config
-    # np_config.enable_numpy_behavior()
-
-    #TODO: save weights pr epoch 
-    #TODO: save metric with epochs
-    #TODO: online loading of data with or without online augmentation
-
-
-    # tensorboard_callback = tf.keras.callbacks.TensorBoard(
-    #     #log_dir=f"../tb_logs/{os.environ['SLURM_JOB_NAME']}/{modality}",
-    #     #log_dir=f"../tb_logs/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}",
-    #     log_dir=modality.tensorboard_path,
-    #     histogram_freq=1,
-    #     write_graph=True,
-    #     write_images=False,
-    #     write_steps_per_second=False,
-    #     update_freq='epoch',
-    #     profile_batch=0,
-    #     embeddings_freq=0,
-    #     embeddings_metadata=None)
-
-
-
-        
-                
-                    
-
-
-    
-    
     #x_val = list(valDS.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]
     #x_val = list(valDS.as_numpy_iterator())[0][0][0:modality.tensorboard_num_predictimages]
     pltcallback = PlotCallback()
@@ -314,12 +207,6 @@ def train_model(model, trainDS, valDS):
         #callbacks = [tensorboard_callback,pltcallback],
     )
 
-    # print("\n"+f"{model.name} - Train accuracy:\t {round (model.history['acc'][0], 4)}".center(50, '.'))
-
-    #try:   
-    #    model.summary()
-    #except:
-    #    print("\n"+f"{model.name} - Model summary failed".center(50, '.'))
 
     return model
 
@@ -363,24 +250,7 @@ def get_unet_model(modality_name="autoencoder"):
             )
     #https://github.com/ZFTurbo/segmentation_models_3D/blob/master/segmentation_models_3D/models/unet.py#L166
 
-    #TODO: sbatch variable for learning_rate
-    #opt = tf.keras.optimizers.Adam()
-    #learning_rate = opt.lr.numpy()*len(tf.config.list_physical_devices('GPU'))
-    #opt.lr.assign(learning_rate)
-
-    #autoencoder._name = f"{modality_name}_{os.environ['SLURM_JOB_NAME']}"
-    autoencoder._name = f"{modality.modeltype}_{modality.modality_name}"#f"{modality_name}_{modality.job_name}"
-
-    #TODO: check loss function?
-    #TODO: add MSE and MAE for each epoch and save log
-    #TODO: add loss and val loss function for each epoch
-
-    #reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE #SUM #NONE 
-    #https://www.tensorflow.org/api_docs/python/tf/keras/losses/MeanAbsoluteError
-    #mse = tf.keras.losses.MeanSquaredError()#reduction)
-    #mae = tf.keras.losses.MeanAbsoluteError()#reduction)
-    
-
+    autoencoder._name = f"{modality.modeltype}_{modality.modality_name}"
 
     opt = tf.keras.optimizers.Adam(learning_rate=modality.autoencoder_learning_rate)
     loss = tf.keras.losses.MeanSquaredError(name="loss_mse")
@@ -391,10 +261,6 @@ def get_unet_model(modality_name="autoencoder"):
 
     autoencoder.compile(opt, loss=loss, metrics=metrics)
 
-
-    #print(autoencoder.summary())
-
-    
 
     return autoencoder
 
@@ -417,63 +283,11 @@ def model_building(trainDS, valDS):
     start_time = time.time()
 
 
-    
-    # shape,idx = patients_df[["dim","tag_idx"]][patients_df.tag.str.contains(modality, case=False)].values[0]
-    # gpus = tf.config.list_physical_devices('GPU')
-    # strategy = tf.distribute.MirroredStrategy()
-    # if len(gpus)>1:
-
-    #     print("\nprint two gpus\n")
-        
-    #     with strategy.scope():
-    #         #model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
-    #         model = get_unet_model(modality.shape,modality.modality_name)
-            
-
-    # else: 
-    #     # model = get_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
-    #     # shape=x_data.shape
-    #     #model = get_unet_model(shape, f"{os.environ['SLURM_JOB_NAME']}")
-    #     model = get_unet_model(modality.shape,modality.modality_name)
-        #model = get_unet_model(shape, f"asd")
-
-    #with modality.strategy.scope():
-    #        model = get_unet_model(modality.image_shape,modality.modality_name)
-    
     model = get_unet_model(modality.modality_name)
-
-
-
-    #TODO: load selected weights from sbatch variable if exists
-    
-    #model = train_model(model,x_data[idx], y_data[idx])
-    #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}"
-    #savepath = f"../models/{os.environ['SLURM_JOB_NAME']}/{modality}/{os.environ['SLURM_JOB_ID']}/"
-    #save_path = os.path.join(modality.model_path,modality.model_name)
-    #with modality.strategy.scope():
-    # if os.path.isdir(modality.model_path): 
-    #     #if len(gpus)>1:
-    #     #    with strategy.scope():
-    #             # model.load_weights(os.path.join(savepath,"weights"))    
-    #             #model.load_weights(os.path.join(savepath,modality)) #savepath)
-    #     #        model.load_weights(save_path)
-    #     #        print("Loaded Weights")
-    #     #else: #model.load_weights(os.path.join(savepath,modality)) 
-    #     #    model.load_weights(save_path)       
-    #     #with modality.strategy.scope:
-    #     model.load_weights(save_path)
-    #     print("Loaded Weights")
-    # else: 
-    #     model = train_model(model, trainDS, valDS)
-        #model.save(save_path)   
-        #model.save_weights(os.path.join(savepath,modality))
 
     if modality.self_superviced:
         model = train_model(model, trainDS, valDS)
 
-    #TODO: save images from recreation, with noisy and clean included (use more than 5 images in the plot)
-        
-    # model.save(f"../models/{model.name}/{os.environ['SLURM_JOB_NAME']}/{os.environ['SLURM_JOB_ID']}-{os.environ['SLURM_JOB_NAME']}")
 
     print("\n"+f" Model building finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
 
@@ -495,8 +309,8 @@ def build_train_classifier(encoder, y_train, y_val, labels):
     x = layers.Flatten(name='flatten')(x)
     
     if modality.classifier_multi_dense:
-        x = layers.Dense(4096, activation='relu', name='fc1')(x)
-        x = layers.Dense(4096, activation='relu', name='fc2')(x)
+        #x = layers.Dense(4096, activation='relu', name='fc2')(x)
+        x = layers.Dense(128, activation='relu', name='fc1')(x)
     x = layers.Dense(1, activation='sigmoid', name='predictions')(x)
 
     #N = x.shape[-1]
@@ -613,27 +427,9 @@ def evaluate_classifier(classifier, y_test, labels):
 
 
 
-
-    # print(cfr_dataframe)
-
-    # print(cfr)
-
-    # modality.cfr = cfr
-
-    # print(modality.mrkdown())
-
-
-    #auc_l = list()
-    #if isinstance(y_test, np.ndarray):
-    #    n_size = int(y_test[0].shape[0])
-    #else:
-    #    n_size = int(y_test.shape[0])
     n_size = len(labels)
     n_iterations = modality.Nbootstrap_steps
 
-    # print(y_test.shape)
-    # print(len(labels))
-    # print(labels.shape)
     names = [loss.name,*[metrics[i].name for i in range(len(metrics))],"f1_score"]
     results = {n:list() for n in names}
     results_stats = {n:{f"{s}_{n}":list() for s in ["avg","std","lower","upper"]} for n in names}
@@ -653,10 +449,6 @@ def evaluate_classifier(classifier, y_test, labels):
         
         res = classifier.evaluate(test,labels_test,batch_size = modality.classifier_test_batchsize, verbose = 0)
 
-        #auc_l.append(res[-1])
-        #print(f"Run: {i}/{n_iterations} - AUC: {res[-1]}")
-        
-        #results = {}
         for n,r in enumerate(res):
             results[names[n]].append(r)
         try:
@@ -666,18 +458,9 @@ def evaluate_classifier(classifier, y_test, labels):
             
         if i >1:
             
-            # stat = {}
-            # for k,v in results.items():
-            #     s = stats(v)
-            #     for i,rsk in enumerate(results_stats[k].keys()):
-            #         results_stats[k][rsk].append(s[i])
-            #     #stat[f"avg_{k}"], stat[f"std_{k}"], stat[f"lower_{k}"], stat[f"upper_{k}"] = stats(results[k])
-                
             
             with evaluate_writer.as_default():
-                for key, value in results.items():
-                    #tf.summary.scalar(f"{modality.modality_name}/{modality.modeltype}_{key}",value[-1],i)
-                    
+                for key, value in results.items():                  
 
                     if key == "f1_score":
                       if len(results["f1_score"]) <2:
@@ -784,77 +567,4 @@ def create_layout_summary(results,results_stats,model_type):
     return cs_summary.pb(layout_pb2.Layout(
             category=[a,b,c,d,e,f,g]
         ))
-
-# def create_layout_summary(results,results_stats,model_type):
-#     charts = [[
-#                 layout_pb2.Category(
-#                     title=key,
-#                     chart=[
-#                             layout_pb2.Chart(
-#                                 title=key,
-#                                 margin=layout_pb2.MarginChartContent(
-#                                     series=[
-#                                         layout_pb2.MarginChartContent.Series(
-#                                             value=f"{model_type}/{key}",
-#                                             lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
-#                                             upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
-#                                         ),
-#                                     ],
-#                                 ),
-#                         ),*[[
-#                         layout_pb2.Chart(
-#                             title=k,
-#                             margin=layout_pb2.MarginChartContent(
-#                                 series=[
-#                                     layout_pb2.MarginChartContent.Series(
-#                                         value=f"{model_type}/{k}",
-#                                         lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
-#                                         upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
-#                                     ),
-#                                 ],
-#                             ),
-#                         ),
-#                     ][0] for k in results_stats[key].keys() if not k.startswith("upper") and not k.startswith("lower")]],
-#                 )
-#             ]for key in results.keys()]
-#     a,b,c,d,e,f,g = charts
-#     return cs_summary.pb(layout_pb2.Layout(
-#             category=[a,b,c,d,e,f,g]
-#         ))
-
-    # return cs_summary.pb(
-    # layout_pb2.Layout(
-    #         category=[[
-    #             layout_pb2.Category(
-    #                 title=key,
-    #                 chart=[
-    #                         layout_pb2.Chart(
-    #                             title=key,
-    #                             margin=layout_pb2.MarginChartContent(
-    #                                 series=[
-    #                                     layout_pb2.MarginChartContent.Series(
-    #                                         value=f"{model_type}/{key}",
-    #                                         lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
-    #                                         upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
-    #                                     ),
-    #                                 ],
-    #                             ),
-    #                     ),*[[
-    #                     layout_pb2.Chart(
-    #                         title=k,
-    #                         margin=layout_pb2.MarginChartContent(
-    #                             series=[
-    #                                 layout_pb2.MarginChartContent.Series(
-    #                                     value=f"{model_type}/{k}",
-    #                                     lower=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('lower')][0]}",
-    #                                     upper=f"{model_type}/{[k_ for k_ in results_stats[key].keys() if k_.startswith('upper')][0]}",
-    #                                 ),
-    #                             ],
-    #                         ),
-    #                     ),
-    #                 ][0] for k in results_stats[key].keys() if not k.startswith("upper") or not k.startswith("lower")]],
-    #             )
-    #         ]for key in results.keys()][0],
-    #     ),
-    # )
 

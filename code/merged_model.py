@@ -53,7 +53,7 @@ def upsizedown(models_dict, method, half = None):
             else:
                 p_tup = (p//2,p//2)
             pad_tup.append(p_tup)
-            #print(f"a-{a}, t-{t}, a//t-{max(a,t)//min(a,t)}, a/t-{max(a,t)/min(a,t)}")
+            
             pool_tup.append(max(a,t)//min(a,t))
 
     mod = {}
@@ -94,9 +94,6 @@ def upsizedown(models_dict, method, half = None):
 
 
 
-
-
-
 def DecoderUpsamplingX2Block(filters, stage, use_batchnorm=False):
     up_name = 'decoder_stage{}_upsampling'.format(stage)
     conv1_name = 'decoder_stage{}a'.format(stage)
@@ -124,44 +121,19 @@ def DecoderUpsamplingX2Block(filters, stage, use_batchnorm=False):
     def wrapper(input_tensor, skip=None):
         if skip is not None:
             x_temp = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
-            # print(x_temp.shape)
-            # print(x_temp.shape[:-1])
-            # print(x_temp.shape[:-2])
-            # print(skip.shape)
-            # print(skip.shape[:-1])
-            # print(skip.shape[:-2])
+
             if not isinstance(skip, list) and not np.array_equal(x_temp.shape[:-1] , skip.shape[:-1]):
-                # xskip_dict = {'x':input_tensor,'skip':skip}
-                # mod = upsizedown(xskip_dict, modality.decoder_method)
+
                 
                 try:
-                    # xskip_dict = {'x':input_tensor,'skip':skip}
-                    # mod = upsizedown(xskip_dict, modality.decoder_method)
-
-                    # x,skip = [(value if key not in mod.keys() else mod[key]) for key,value in xskip_dict.items()]
-                    # x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
+    
                     if modality.decode_try_upsample_first:
                         x = firstupsample(input_tensor,skip)
                     else:
                         x = noupsample(input_tensor,skip)
                 except ValueError as e:
-                    # input_tensor = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
-                    # xskip_dict = {'x':input_tensor,'skip':skip}
-                    # mod = upsizedown(xskip_dict, modality.decoder_method)
-                    # x,skip = [(value if key not in mod.keys() else mod[key]) for key,value in xskip_dict.items()]
-                    # x = layers.Concatenate(axis=concat_axis, name=concat_name)([x, skip])
-
+   
                     print("Error: decode_try_upsample_first method not supported")
-                    #sys.exit(e)
-                    #raise ValueError("Error: decode_try_upsample_first method not supported")
-
-                    
-                    
-                    # if modality.decode_try_upsample_first:
-                    #     x = noupsample(input_tensor,skip)
-                    # else:
-                    #     x = firstupsample(input_tensor,skip)
-                        
 
             else:
                 x = layers.UpSampling3D(size=2, name=up_name)(input_tensor)
@@ -260,8 +232,7 @@ def build_merged_unet(
 
     for i in range(n_upsample_blocks):
         if modality.same_shape:
-        #if False:
-            #skip = layers.Concatenate(axis=-1)([skips[i*2],skips[(i*2)+1]]) if i < len(skips)/2 else None
+
             skip = [skips[i*2],skips[(i*2)+1]] if i < len(skips)/2 else None
             x = decoder_block(decoder_filters[i], stage=i, use_batchnorm=use_batchnorm)(x, skip)
         else:
@@ -269,18 +240,7 @@ def build_merged_unet(
             adc, t2w = [skips[(i*2)+n] for n in range(2)] if i < len(skips)/2 else (None,None)
             a = decoder_block(decoder_filters[i], stage=f"{i}_{modality.merged_modalities[0]}", use_batchnorm=use_batchnorm)(a, adc)
             t = decoder_block(decoder_filters[i], stage=f"{i}_{modality.merged_modalities[1]}", use_batchnorm=use_batchnorm)(t, t2w)
-        #elif mode == makes no sense
-        #elif False:
-            # if i < len(skips)/2:
-        
-            #     #skips_dict = {f"adc{i}":skips[i*2],f"t2w{i}":skips[(i*2)+1]}
-            #     skips_dict = {f"adc{i}":adc,f"t2w{i}":t2w}
-            #     mod = upsizedown(skips_dict, modality.encoder_method, half = False)
-            #     t2w,adc = [(value if key not in mod.keys() else mod[key]) for key,value in skips_dict.items()]
-            #     skip = layers.Concatenate(axis=-1)([adc,t2w])
 
-            # x = decoder_block(decoder_filters[i], stage=i, use_batchnorm=use_batchnorm)(x, skip)
-            
 
     
     def xdropout(x, name_suffix=""):
@@ -296,8 +256,6 @@ def build_merged_unet(
             kernel_initializer='glorot_uniform',
             name=f'final_conv_{name_suffix}',
         )(x)
-        #x = layers.Activation(activation, name=f"{activation}_{name_suffix}")(x)
-        #x = layers.Activation(activation, name=f"{name_suffix}")(x)
         return x
     def activation_final(x, name_suffix=""):
         x = layers.Activation(activation, name=f"{name_suffix}")(x)
@@ -310,11 +268,8 @@ def build_merged_unet(
         x = final_conv(x, name_suffix="SameShape")
         if modality.classes > 1:
             model = Model(input_, activation_final(x, name_suffix=modality.activation))
-            #x = activation_final(x, name_suffix=modality.activation)
-            #model = Model(input_, [layers.Lambda(tf.unstack, arguments=dict(axis=-1))(x)])
         else:
             model = Model(input_, [activation_final(x, name_suffix=f"{name}") for name in modality.merged_modalities])
-            #model = Model(input_, x)
     else:
         if modality.dropout:
             a = xdropout(a, name_suffix=f"{modality.merged_modalities[0]}")
@@ -328,18 +283,11 @@ def build_merged_unet(
     return model
 
 
-
 def get_merged_model():
     encoders = {}
     for i,modality_name in enumerate(modality.merged_modalities):
 
-        #dims = parameters.lst[modality_name]["image_shape"]
-        # #dims = modality.image_shape[i]
-        # print(modality.image_shape[i])
-        # print(isinstance(modality.image_shape[i], tuple))
-        # print(modality.reshape_dim[i])
-        # print(isinstance(modality.reshape_dim[i], tuple))
-        # dims = modality.reshape_dim[i] if modality.reshape_dim[i] != None else modality.image_shape[i]
+ 
         dims = modality.image_shape[i] if isinstance(modality.image_shape[i], tuple) else modality.reshape_dim[i]
             
         model = sm.Unet(
@@ -378,13 +326,12 @@ def get_merged_model():
     
     def firstmaxpool(encoders):
         x = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(encoders[enc].output)
-        #encoders[enc] = Model(encoders[enc].input, x)
+        
         enc_copy =encoders.copy()
         enc_copy[enc] = Model(enc_copy[enc].input, x)
 
         mod = upsizedown(enc_copy, modality.encoder_method)
 
-        #concat = layers.Concatenate(axis=-1)([(enc_copy[key].output if key not in mod.keys() else mod[key]) for key in enc_copy.keys()])
         concat = merge_method([(enc_copy[key].output if key not in mod.keys() else mod[key]) for key in enc_copy.keys()])
         
         encoders = enc_copy.copy()
@@ -393,7 +340,6 @@ def get_merged_model():
     def fistconcat(encoders):
         mod = upsizedown(encoders, modality.encoder_method)
 
-        #concat = layers.Concatenate(axis=-1)([(encoders[key].output if key not in mod.keys() else mod[key]) for key in encoders.keys()])
         concat = merge_method([(encoders[key].output if key not in mod.keys() else mod[key]) for key in encoders.keys()])
 
         concat = layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same')(concat)
@@ -406,27 +352,13 @@ def get_merged_model():
             else: concat = fistconcat(encoders)
         except ValueError as e:
             print("Error: encode_try_maxpool_first method not supported")
-            #sys.exit(e)
-        #raise ValueError("Error: encode_try_maxpool_first method not supported")
-        
-
-        # if modality.decode_try_maxpool_first:
-        #     concat = fistconcat(encoders)
-        # else: concat = firstmaxpool(encoders)
-        
-        #encoders[enc] = Model(encoders[enc].input, x)
-
-
-
+   
 
     model = Model(inputs=[enc.input for enc in encoders.values()], outputs=[concat],name="concat_model")
 
     return build_merged_unet(
                     backbone = model, 
                     decoder_block_type = modality.decoder_block_type, 
-                    #decoder_filters=(1024,512,256, 128, 64),
-                    #decoder_filters=(512,256, 128, 64, 32), 
-                    #decoder_filters=(256, 128, 64, 32, 16), 
                     decoder_filters = modality.decoder_filters,
                     n_upsample_blocks = 5, 
                     classes = modality.classes, 

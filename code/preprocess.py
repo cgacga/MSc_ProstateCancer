@@ -11,21 +11,6 @@ from data_augmentation import set_seed
 
 
 def parse_csv(data_path,type_lst):
-    """
-    This function takes in a path to the folder where metadata.csv file is, and a list of modalities that we want to extract. 
-    The frist folder containing the modality will be selected
-    It returns a dataframe with the patients information.
-    
-    :param data_path: The path to the folder containing the metadata.csv file
-    :param type_lst: The list of modalities that you want to include in the dataframe
-    :return: a dataframe with the following columns:
-        - Series UID: Unique identifier for each series
-        - Subject ID: Unique identifier for each patient
-        - Series Description: Description of the series
-        - Study Date: Date of the study
-        - File Location: Location of the file
-        - tag: The modality of the series
-    """
 
     if isinstance(type_lst, dict):
         type_lst = type_lst.keys()
@@ -234,7 +219,7 @@ def normalize(patients_arr,patients_df):
             for img in t2_array:
                 t2_upper_perc.append(np.percentile(img, 99))
                 t2_lower_perc.append(np.percentile(img, 1))
-        elif "ADC" in pat.tag:
+        elif "ADC" in pat.tag: #revisit
             minmax_filter.Execute(patients_arr[pat.idx])
             adc_max_intensity = minmax_filter.GetMaximum()
             adc_min_intensity = minmax_filter.GetMinimum()
@@ -402,20 +387,15 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=1):
             for k,pat_slices in enumerate(pat):
                 
                 reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-                # reshaped_arr[k][j] = tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32)
                 
-
-                #reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.convert_to_tensor(sitk.GetArrayFromImage(pat_slices).transpose(1,2,0)),-1), channels, -1)
         
         for i in range(len(reshaped_arr)):
-            # reshaped_arr[i]=tf.convert_to_tensor(tf.expand_dims(reshaped_arr[i],-1),dtype=tf.float32)
             reshaped_arr[i]=tf.convert_to_tensor(reshaped_arr[i],dtype=tf.float32)
         output.append(reshaped_arr)
     
-    # Updating the dataframe with new indexes
+    
     patients_df[["tag_idx","pat_idx"]] = patients_df.pat_idx.apply(lambda x: pd.Series([x[1],x[0]]))
-    #patients_df.drop(columns="idx", inplace=True)
-
+    
     print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
 
     return [*output, patients_df]
@@ -452,8 +432,6 @@ def preprocess(parameters, nslices = False):
     return pat_slices, pat_df
 
 
-
-
 def update_shape(pat_df):
     if modality.modality_name.startswith("Merged"):
         shape,idx=[],[]
@@ -482,94 +460,7 @@ def split_data(pat_slices, pat_df, autoencoder = True):
     
     update_shape(pat_df)
 
-    
-    # # shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
-    # # #parameters.insert_param(modality_name,"image_shape",shape)
-    # # #parameters.insert_param(modality_name,"idx",idx)
-    # # modality.modality_name.image_shape = shape
-    # # modality.modality_name.idx = idx
-    # if modality.modality_name.startswith("Merged"):
-    #     shape,idx=[],[]
-    #     for modality_name in modality.merged_modalities:
-    #         shape_,idx_ = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
-    #         shape.append(shape_)
-    #         idx.append(idx_)
-    #     modality.same_shape = len(set(shape))==1.
-    # else:
-    #     shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality.modality_name, case=False)].values[0]
-    
-    # modality.image_shape = shape
-    # modality.idx = idx
-
             
     if autoencoder:
         return y_train, y_val, pat_df
     else: return y_train, y_val, y_test, pat_df
-    
-
-    # #shape_idx = {}
-    # for modality_name in parameters.tags.keys():
-    #     shape,idx = pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]
-    #     parameters.insert_param(modality_name,"image_shape",shape)
-    #     parameters.insert_param(modality_name,"idx",idx)
-    #     #shape_idx[modality_name] = {"image_shape":shape, "idx":idx}
-    
-    # for modality_name in parameters.lst.keys():
-    #     if modality_name.startswith("Merged"):
-            
-    #         # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst if not name.startswith("Merged")])
-    #         # parameters.insert_param(modality_name,"image_shape",[parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
-    #         # parameters.insert_param(modality_name,"idx",[parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])# if not name.startswith("Merged")])
-    #         # parameters.insert_param(modality_name,"image_shape",[shape_idx[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
-    #         # parameters.insert_param(modality_name,"idx",[shape_idx[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
-            
-    #         #print([tuple([shape_idx[name][ishape] for name in parameters.lst[modality_name]["merged_modalities"]]) for ishape in ["image_shape","tag_idx"]])
-    #         shape = tuple([parameters.lst[name]["image_shape"] for name in parameters.lst[modality_name]["merged_modalities"]])
-    #         parameters.insert_param(modality_name,"image_shape",shape)
-    #         parameters.insert_param(modality_name,"same_shape",len(set(shape))==1.)
-    #         idx = tuple([parameters.lst[name]["idx"] for name in parameters.lst[modality_name]["merged_modalities"]])
-    #         parameters.insert_param(modality_name,"idx",list(idx))
-
-        
-            
-    # if autoencoder:
-    #     return y_train, y_val, pat_df
-    # else: return y_train, y_val, y_test, pat_df
-
-    # [parameters.insert_param(modality_name,"image_shape",pat_df["dim"][pat_df.tag.str.contains(modality_name, case=False)].values[0])for modality_name in parameters.lst if not modality_name.startswith("Merged")]
-    # [parameters.insert_param(modality_name,"idx",pat_df["tag_idx"][pat_df.tag.str.contains(modality_name, case=False)].values[0]) for modality_name in parameters.lst if not modality_name.startswith("Merged")]
-
-    # [[parameters.insert_param(modality_name,ishape,pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0]) for ishape in ["image_shape","idx"] ]for modality_name in parameters.lst if not modality_name.startswith("Merged")]
-
-
-    # [[parameters.insert_param(modality_name,ishape,pat_df[["dim","tag_idx"]][pat_df.tag.str.contains(modality_name, case=False)].values[0][i]) for i,ishape in enumerate(["image_shape","idx"]) ]for modality_name in parameters.lst if not modality_name.startswith("Merged")]
-    
-
-
-    # y_train, y_val, y_test  = image_to_np_reshape([y_train, y_val, y_test],pat_df,channels=3)
-
-    # print(y_train.shape)
-    # print(y_train[0].shape)
-    # print(y_train[0][0].shape)
-    # print(y_train[0][0][0].shape)
-
-    # print(type(y_train))
-    # print(type(y_train[0]))
-    # print(type(y_train[0][0]))
-    # print(type(y_train[0][0][0]))
-    # print(type(y_train[0][0][0][0]))
-    # print(type(y_train[0][0][0][0][0]))
-
-    # print((y_train).shape)
-    # print((y_train[0]).shape)
-    # print((y_train[0][0]).shape)
-    # print((y_train[0][0][0]).shape)
-    # print((y_train[0][0][0][0]).shape)
-    # print((y_train[0][0][0][0][0]).shape)
-
-
-#x_train, x_val, x_val = expand_dims([x_train, x_val, x_val],dim=1)
-        
-    # print("\n"+f"Preprocess finished {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}".center(50, '_')+"\n")
-
-    # return y_train, y_val, pat_df

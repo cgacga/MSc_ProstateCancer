@@ -64,17 +64,11 @@ class Patches(layers.Layer):
 
 def augment_patches(patients):
     set_seed()
-    #print("augment")
-    #print(patients.shape)
-    #if len(patients.shape) < 5:
-    #    patients = tf.expand_dims(patients, axis=0)
     patients_shape = tf.shape(patients)
     depth = patients_shape[1]
     channels = patients_shape[-1]
     depth_range = tf.range(patients_shape[1])
     channels_range = tf.range(patients_shape[-1])
-    # reconstructed_arr = np.zeros_like(patients)
-    #reconstructed_arr = tf.zeros_like(patients)
     reconstructed_arr = tf.TensorArray(patients.dtype, size=0, dynamic_size=True, clear_after_read=True)
     reconstructed_arr = reconstructed_arr.unstack(patients)
     slice = tf.zeros_like(patients[0])
@@ -161,20 +155,6 @@ def augment_patches(patients):
                         valid = False
                         break
 
-                    # elements = np.array([])
-                    # for j in i:
-                    #     if j not in left_border:
-                    #         elements = np.append(elements,j-1)
-                    #     if j not in right_border:
-                    #         elements = np.append(elements,j+1)
-                    #     elements = np.append(elements,j-1-num_patches_y)
-                    #     elements = np.append(elements,j+1+num_patches_y)
-                        
-                    # elements = elements[tuple([tf.math.greater_equal(elements,0)&tf.math.less(elements,num_patches)])]
-                    
-                    # if np.any(np.in1d(i, elements)):
-                    #     valid = False
-                    #     break
                                     
                 if valid:
                     break 
@@ -196,10 +176,6 @@ def augment_patches(patients):
         
             x_pos, y_pos = x * step_x, y * step_y
 
-            # i1, i2,i3, i4, i5 = tf.meshgrid(pat, tf.range(patients_shape[1]),tf.range(x_pos,x_pos + step_x),tf.range(y_pos,y_pos + step_y),tf.range(patients_shape[-1]),indexing='ij')
-            # idx = tf.stack([i1, i2, i3, i4, i5], axis=-1)
-            # reconstructed_arr = tf.tensor_scatter_nd_update(reconstructed_arr, idx, tf.expand_dims(patch, 0))
-
             i2,i3, i4, i5 = tf.meshgrid(depth_range ,tf.range(x_pos,x_pos + step_x),tf.range(y_pos,y_pos + step_y),channels_range,indexing='ij')
             idx = tf.stack([i2, i3, i4, i5], axis=-1)
 
@@ -207,12 +183,7 @@ def augment_patches(patients):
         reconstructed_arr = reconstructed_arr.write(pat,slice)
     reconstructed_arr = reconstructed_arr.stack()
             
-            # reconstructed_arr[pat,:,x_pos:x_pos + step_x, y_pos:y_pos + step_y,:] = patch
-    #print(reconstructed_arr.shape)
-    # if (reconstructed_arr.shape[-1] == 1):
-    #     reconstructed_arr = tf.repeat(reconstructed_arr,3,-1)
-    # print(reconstructed_arr.shape)
-    
+
     return reconstructed_arr
 
 
@@ -221,65 +192,14 @@ def augment_build_datasets(y_train,y_val):
     print(f"Augment and build dataset started".center(50, '_'))
     start_time = time.time()
 
-    #modality.steps_pr_epoch = len(y_train)//modality.batch_size_prgpu
-    #modality.validation_steps = len(y_val)//modality.batch_size_prgpu
-
-    #with modality.strategy.scope():
-    # train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
-    # val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
-
-    #pre = sm.get_preprocessing(modality.backbone_name)
-    # y_train = pre(tf.repeat(y_train,3,-1))
-    # y_val = pre(tf.repeat(y_val,3,-1))
-
-    # y_train = tf.repeat(y_train,3,-1)
-    # y_val = tf.repeat(y_val,3,-1)
-
-    # train_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_train), y_train))
-    # val_loader = tf.data.Dataset.from_tensor_slices((augment_patches(y_val), y_val))
-    # yt = pre(tf.repeat(augment_patches(y_train),3,-1))
-    # train_loader = tf.data.Dataset.from_tensor_slices((yt, y_train))
-    # del yt
-    # yv  = pre(tf.repeat(augment_patches(y_val),3,-1))
-    # val_loader = tf.data.Dataset.from_tensor_slices((yv, y_val))
-    # del yv
-    # train_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_train),3,-1), y_train))
-    # val_loader = tf.data.Dataset.from_tensor_slices((tf.repeat(augment_patches(y_val),3,-1), y_val))
-
 
     if isinstance(y_train, np.ndarray):
-        
-        # train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
 
-        # val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":tf.repeat(augment_patches(y),3,-1) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
-
-
-        # train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
-
-        # val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}_{modality.merged_modalities[i]}":augment_patches(y) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
 
         train_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}":augment_patches(y) for i,y in enumerate(y_train)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_train)}))
 
         val_loader = tf.data.Dataset.from_tensor_slices(({f"input_{i+1}":augment_patches(y) for i,y in enumerate(y_val)},{f"{modality.merged_modalities[i]}":y for i,y in enumerate(y_val)}))
 
-        # tl_x = {}
-        # tl_y = {}
-        # for i,y in enumerate(y_train):
-        #     tl_x[f"input_{i+1}_{modality.merged_modalities[i]}"] = augment_patches(y)
-        #     tl_y[f"{modality.merged_modalities[i]}"] = y
-
-        # train_loader = tf.data.Dataset.from_tensor_slices((tl_x,tl_y))
-        # del tl_x,tl_y
-
-
-        # vl_x = {}
-        # vl_y = {}
-        # for i,y in enumerate(y_val):
-        #     vl_x[f"input_{i+1}_{modality.merged_modalities[i]}"] = augment_patches(y)
-        #     vl_y[f"{modality.merged_modalities[i]}"] = y
-
-        # val_loader = tf.data.Dataset.from_tensor_slices((vl_x,vl_y))
-        # del vl_x,vl_y
 
         PlotCallback.x_val = [augment_patches(y[0:modality.tensorboard_num_predictimages]) for y in y_val]
 
@@ -322,24 +242,7 @@ def augment_build_datasets(y_train,y_val):
         PlotCallback.x_val = augment_patches(y_val[0:modality.tensorboard_num_predictimages])
 
 
-        
-        # pre = sm.get_preprocessing(modality.backbone_name)
-        # #tl = pre(tf.repeat(augment_patches(y_train),3,-1))
-        # #asd = tf.zeros_like(y_train)
-        # train_loader = tf.data.Dataset.from_tensor_slices((pre(tf.repeat(augment_patches(y_train),3,-1)), y_train))
-        # # train_loader = tf.data.Dataset.from_tensor_slices((tl, y_train))
-        # # del tl
-        # val_loader = tf.data.Dataset.from_tensor_slices((pre(tf.repeat(augment_patches(y_val),3,-1)), y_val))
-        # PlotCallback.x_val = pre(tf.repeat(augment_patches(y_val[0:modality.tensorboard_num_predictimages]),3,-1))
 
-        #PlotCallback.x_val = list(val_loader.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]
-        #PlotCallback.x_val = list(val_loader.map(lambda x,y: tf.repeat(x,3,-1)))[0:modality.tensorboard_num_predictimages]
-        #PlotCallback.x_val = list(val_loader.map(lambda x,y: x))[0:modality.tensorboard_num_predictimages]
-        #PlotCallback.x_val = pre(tf.repeat(augment_patches(y_val[0:modality.tensorboard_num_predictimages]),3,-1))
-        
-        #PlotCallback.x_val = list(val_loader.map(lambda x,y: pre(tf.repeat(augment_patches(x),3,-1))))[0:modality.tensorboard_num_predictimages]
-    
-        
         trainDS = (
             train_loader
                 .batch(
@@ -363,21 +266,6 @@ def augment_build_datasets(y_train,y_val):
                     buffer_size = tf.data.AUTOTUNE)
                     )
 
-    # gpus = tf.config.list_physical_devices('GPU')
-    # strategy = tf.distribute.MirroredStrategy()
-    # if len(gpus)>1:
-    #PlotCallback.x_val = list(valDS.map(lambda x,y: (x[0:modality.tensorboard_num_predictimages])))[0]#list(valDS.as_numpy_iterator())[0][0][0:modality.tensorboard_num_predictimages]
-
-    # if modality.n_gpus>1:
-    #     # Disable AutoShard.
-    #     options = tf.data.Options()
-    #     options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-        
-    #     trainDS = trainDS.with_options(options)
-    #     valDS = valDS.with_options(options)
-
-    #     trainDS = modality.strategy.experimental_distribute_dataset(trainDS)
-    #     valDS = modality.strategy.experimental_distribute_dataset(valDS)
 
 
 
