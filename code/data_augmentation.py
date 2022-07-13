@@ -9,7 +9,6 @@ from tensorflow.keras import layers
 import segmentation_models_3D as sm
 from params import modality
 from model_building import PlotCallback
-#from main import set_seed
 
 def set_seed(s=42):
     random.seed(s)
@@ -86,7 +85,6 @@ def augment_patches(patients):
 
     for pat,patient in enumerate(patients):
         
-        #rnd_reduction = np.random.randint(min_reduction,max_reduction,size=2)
         if min_reduction == max_reduction:
             rnd_reduction = tf.stack([min_reduction,max_reduction])
         else:
@@ -102,10 +100,8 @@ def augment_patches(patients):
         
         patches = Patches(ksizes,strides)(tf.expand_dims(patient, axis=0))
 
-        #num_patches = patches.shape[0]       
         num_patches = tf.shape(patches)[0]
         
-        #rnd_percentage = np.random.randint(min_percentage,max_percentage,size=1)
         if min_percentage == max_percentage:
             rnd_percentage = min_percentage
         else:
@@ -154,8 +150,7 @@ def augment_patches(patients):
                     if tf.reduce_any(tf.reduce_any(tf.equal(tf.expand_dims(elements_stack, 0), tf.expand_dims(i, 1)), 1)):
                         valid = False
                         break
-
-                                    
+          
                 if valid:
                     break 
             
@@ -202,6 +197,7 @@ def augment_build_datasets(y_train,y_val):
 
 
         PlotCallback.x_val = [augment_patches(y[0:modality.tensorboard_num_predictimages]) for y in y_val]
+        PlotCallback.x_val_temp = [y[0:modality.tensorboard_num_predictimages] for y in y_val]
 
         def repeatfn(x,y):
             return (({key:tf.repeat(val,3,-1) for key,val in x.items()},y))
@@ -213,9 +209,6 @@ def augment_build_datasets(y_train,y_val):
                     batch_size = modality.autoencoder_batchsize
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .map(
-                    #lambda x, y: (tf.repeat(x,3,-1), y)
-                    #lambda x,y: ({key:tf.repeat(val,3,-1) for key,val in x.items()},y)
-                    #lambda x,y:({key:tf.repeat(val,3,-1) for key,val in x.items()},{key:val for key,val in y.items()})
                     repeatfn
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .prefetch(
@@ -227,8 +220,6 @@ def augment_build_datasets(y_train,y_val):
                     batch_size = modality.autoencoder_batchsize
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .map(
-                    #lambda x, y: (tf.repeat(x,3,-1), y)#tf.repeat(y,3,-1))
-                    #lambda x,y: (({key:tf.repeat(val,3,-1) for key,val in x.items()},{key:val for key,val in y.items()}))
                     repeatfn
                     ,num_parallel_calls=tf.data.AUTOTUNE)
                 .prefetch(

@@ -47,7 +47,6 @@ def upsizedown(models_dict, method, half = None):
         for a,t in zip(a,t):
             p = abs(a-t)
             
-            #if p % 2 == 1 and p > 1:
             if p % 2 == 1:
                 p_tup = (p//2,p//2+1)
             else:
@@ -124,9 +123,7 @@ def DecoderUpsamplingX2Block(filters, stage, use_batchnorm=False):
 
             if not isinstance(skip, list) and not np.array_equal(x_temp.shape[:-1] , skip.shape[:-1]):
 
-                
-                try:
-    
+                try:    
                     if modality.decode_try_upsample_first:
                         x = firstupsample(input_tensor,skip)
                     else:
@@ -157,7 +154,6 @@ def DecoderTransposeX2Block(filters, stage, use_batchnorm=False):
     conv_block_name = 'decoder_stage{}b'.format(stage)
     concat_name = 'decoder_stage{}_concat'.format(stage)
 
-    #concat_axis = bn_axis = 4 if backend.image_data_format() == 'channels_last' else 1
     concat_axis = bn_axis = 4 
 
     def layer(input_tensor, skip=None):
@@ -262,7 +258,6 @@ def build_merged_unet(
         return x
 
     if modality.same_shape:
-    #if False:
         if modality.dropout:
             x = xdropout(x,name_suffix="SameShape")
         x = final_conv(x, name_suffix="SameShape")
@@ -286,8 +281,6 @@ def build_merged_unet(
 def get_merged_model():
     encoders = {}
     for i,modality_name in enumerate(modality.merged_modalities):
-
- 
         dims = modality.image_shape[i] if isinstance(modality.image_shape[i], tuple) else modality.reshape_dim[i]
             
         model = sm.Unet(
@@ -337,7 +330,7 @@ def get_merged_model():
         encoders = enc_copy.copy()
         return concat
 
-    def fistconcat(encoders):
+    def firstresample(encoders):
         mod = upsizedown(encoders, modality.encoder_method)
 
         concat = merge_method([(encoders[key].output if key not in mod.keys() else mod[key]) for key in encoders.keys()])
@@ -349,7 +342,7 @@ def get_merged_model():
         try:
             if modality.encode_try_maxpool_first:
                 concat = firstmaxpool(encoders)
-            else: concat = fistconcat(encoders)
+            else: concat = firstresample(encoders)
         except ValueError as e:
             print("Error: encode_try_maxpool_first method not supported")
    

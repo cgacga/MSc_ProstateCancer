@@ -22,12 +22,12 @@ class parameters(object):
                 
                 job_name : str = None,
                 
-                backbone_name : str = "vgg16", #resnet18
+                backbone_name : str = "vgg16", #vgg19
                 classes : int = 1,
                 activation : str = "sigmoid",
                 encoder_weights : str = None, #"imagenet"
                 encoder_freeze : bool = False,
-                decoder_block_type : str = "upsampling", #transpose
+                decoder_block_type : str = "upsampling",
                 autoencoder_epocs : int = 100,
                 autoencoder_batchsize : int = 2,
                 autoencoder_learning_rate : float = 1e-4,
@@ -114,7 +114,7 @@ class parameters(object):
         self.decoder_filters = tuple
         self.center_filter = int
         self.tensorboard_num_predictimages = 5
-        self.tensorboard_img_epoch = 10
+        self.tensorboard_img_epoch = 50
         self.training_logs = {}
         self.__class__._g = self
     
@@ -127,7 +127,6 @@ class parameters(object):
             if key in _g.__dict__:
               _g.__dict__[key] = value
             else:
-                #raise KeyError(f"{key} not a valid key, must be part of {_g.__dict__.keys()}")
                 raise KeyError(f"{key} not a valid key. Check the spelling, valid keynames are: {*_g.add_modality.__annotations__.keys(),*_g.set_global.__annotations__.keys()}")
         
         missing = [key for key, x in _g.__dict__.items() if x == None and key != 'reshape_dim' and key != 'gpus' and key != 'encoder_weights' and key != "dropout" and key != "job_name"]
@@ -141,7 +140,7 @@ class parameters(object):
             C_eval_name = f"/CElr{_g.classifier_test_learning_rate}_CEbs{_g.classifier_test_batchsize}_CEbp{_g.bootpercentage}"
 
             AE_name = []
-            AE_name.append(f"AEw{_g.encoder_weights}_AElr{_g.autoencoder_learning_rate}_AEbn{_g.batchnorm}_AEd{_g.dropout}_AEsr{'-'.join(map(str, _g.minmax_shape_reduction))}_AEap{'-'.join(map(str, _g.minmax_augmentation_percentage))}_AEmvrp{_g.mask_vs_rotation_percentage}")
+            AE_name.append(f"AEbn{_g.backbone_name}_AEw{_g.encoder_weights}_AElr{_g.autoencoder_learning_rate}_AEbn{_g.batchnorm}_AEd{_g.dropout}_AEsr{'-'.join(map(str, _g.minmax_shape_reduction))}_AEap{'-'.join(map(str, _g.minmax_augmentation_percentage))}_AEmvrp{_g.mask_vs_rotation_percentage}")
             AE_name.append(f"{modality_name}_AEe{_g.autoencoder_epocs}_AEbs{_g.autoencoder_batchsize}")
           
             if _g.merged:
@@ -210,7 +209,6 @@ def to_json(o, level=0):
     ret += '"' + o + '"'
   elif isinstance(o, list):
     ret += "[" + ",".join([to_json(e, level + 1) for e in o]) + "]"
-  # Tuples are interpreted as lists
   elif isinstance(o, tuple):
     ret += "[" + ",".join(to_json(e, level + 1) for e in o) + "]"
   elif isinstance(o, bool):

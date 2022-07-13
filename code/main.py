@@ -22,15 +22,12 @@ from params import *
 
 
 # By setting config.gpu_options.allow_growth to True, Tensorflow will only grab as much GPU-memory as needed. If additional memory is required later in the code, Tensorflow will allocate more memory as needed. This allows the user to run two or three programs on the same GPU.
-# tf.keras.backend.clear_session()
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
   try:
     # Currently, memory growth needs to be the same across GPUs
     for gpu in gpus:
       tf.config.experimental.set_memory_growth(gpu, True)
-    # logical_gpus = tf.config.list_logical_devices('GPU')
-    # print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:
     # Memory growth must be set before GPUs have been initialized
     print(e)
@@ -52,163 +49,60 @@ os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
 os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '2'
 
 
-# Deprecation removes deprecated warning messages
-# from tensorflow.python.framework import deprecation
-# deprecation._PRINT_DEPRECATION_WARNINGS = True
 
 # Seed for reproducibility
-# np.random.seed(42)
-
-# For reproducible results    
-
 set_seed()
 
 
 def main(*args, **kwargs):
     start_time = time.time()
     
-    if "slurm_array" in kwargs:
-        slurm_array = kwargs["slurm_array"]
-    #if "index" in kwargs:
-        index = int(kwargs["index"])
+    parameters.set_global(
+            data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
+            encoder_weights = None,
+            self_superviced = True,
 
-        if slurm_array == "all":
-            all(index)
-        elif slurm_array == "single":
-            single_run(index)
-        elif slurm_array == "merged":
-            # if index >96:
-            #   i = index - 97
-            #   single_run(i)
-            # elif index == 96:
-            #   test_run(index)
-            # else:
-            #   merged_run(index)
-            
-            merged_run(index)
-            # if index == 96:
-            #   test_run(index)
-            # else:
-            #   merged_run(index)
-        elif slurm_array == "samesize":
-            samesize_run(index)
+            autoencoder_epocs = 300,
+            autoencoder_batchsize = 2,
+            classifier_train_epochs = 30,
+            classifier_train_batchsize = 1,
+            classifier_test_batchsize = 1, 
+            classifier_train_learning_rate = 1e-5,
+            classifier_test_learning_rate = 1e-5,
 
-        elif slurm_array == "singlefalse":
-            single_run_ssFALSE(index)
-        elif slurm_array == "mergedfalse":
-            merged_run_ssFALSE(index)
-    else:
-        #raise ValueError("Missing slurm_array in kwargs")
+            bootpercentage = 1,
+            classifier_freeze_encoder = True,
+            classifier_multi_dense = False,
 
-            
-        for index in range(2):
-            
-            encoder_weights = None #[None,"imagenet"]
-            self_superviced = True #[True,False]
-            
-            classifier_train_epochs : int = 50#500
-
-            #IKKE classifier_freeze_encoder
-            #hvis self_superviced = False
-
-            modality_name = ["ADC","t2tsetra"]       
-            autoencoder_learning_rate = [1e-3, 1e-4]
-            cube = [[[15,15],[60,60],100],[[10,20],[40,60],50]]
-
-            center_filter = 1024
-            decoder_filters = (256, 128, 64, 32, 16)
-            encoder_method, decoder_method, encode_try_maxpool_first, decode_try_upsample_first = ["upsample","maxpool",False,True]
-            #test *,*,True,*whatever]
-            
+            minmax_shape_reduction  = [15,15],
+            minmax_augmentation_percentage  = [60,60],
+            mask_vs_rotation_percentage = 50
+            )
 
 
-            iterate = list(itertools.product(
-                                    cube,
-                                    autoencoder_learning_rate,
-                                    modality_name
-                                    ))
+    parameters.add_modality(
+        modality_name = "ADC", 
+        reshape_dim=(32,128,96),
+        skip_modality=False,
+        autoencoder_epocs = 500
+        )
+    parameters.add_modality(
+        modality_name = "t2tsetra", 
+        reshape_dim=None,
+        skip_modality=False
+        )
+        
 
-            cube_params, autoencoder_learning_rate, modality_name = iterate[index]
-            minmax_shape_reduction, minmax_augmentation_percentage,mask_vs_rotation_percentage = cube_params
-
+    parameters.join_modalities(["ADC", "t2tsetra"],
+            decoder_filters = (256, 128, 64, 32, 16),
+            encoder_method = "maxpool",
+            decoder_method = "upsample",
+            center_filter = 512, 
+            decode_try_upsample_first = True, 
+            encode_try_maxpool_first = True,
+            merge_method = "avg")
 
             
-
-            if modality_name == "ADC":
-                autoencoder_epocs = 35#100
-                autoencoder_batchsize = 32
-                reshape_dim = (32,128,96)
-                skip_modality = False
-                classifier_train_batchsize = 32
-                classifier_train_epochs = 35
-                classifier_test_batchsize = 32
-                bootpercentage = 1
-                merge_method = "avg"
-            elif modality_name == "t2tsetra":
-                autoencoder_epocs = 35#250
-                autoencoder_batchsize = 2
-                reshape_dim = None
-                skip_modality = False
-                classifier_train_batchsize = 2
-                classifier_train_epochs = 35
-                classifier_test_batchsize = 2
-                bootpercentage = 1
-                merge_method = "avg"
-
-            job_name = f"ss{self_superviced}_ae{autoencoder_epocs}_abs{autoencoder_batchsize}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctesb{classifier_test_batchsize}_cteslr"
-
-
-
-            #is not used when ss = False
-
-
-            parameters.set_global(
-                    data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
-                    job_name = job_name,
-                    autoencoder_learning_rate  = autoencoder_learning_rate,
-                    minmax_shape_reduction  = minmax_shape_reduction,
-                    minmax_augmentation_percentage  = minmax_augmentation_percentage,
-                    mask_vs_rotation_percentage = mask_vs_rotation_percentage,
-                    encoder_weights = encoder_weights,
-                    self_superviced = self_superviced
-                    )
-
-            parameters.add_modality(
-                job_name = job_name,
-                modality_name = modality_name, 
-                reshape_dim=reshape_dim,  
-                autoencoder_batchsize = autoencoder_batchsize,
-                autoencoder_epocs = autoencoder_epocs,
-                skip_modality=skip_modality,
-                classifier_train_batchsize = classifier_train_batchsize,
-                classifier_train_epochs = classifier_train_epochs,
-                classifier_test_batchsize = classifier_test_batchsize
-                )
-
-
-
-        classifier_train_batchsize : int = 2
-        classifier_train_epochs : int = 35
-        classifier_test_batchsize : int = 2
-        autoencoder_batchsize = 1
-        autoencoder_epocs = 35
-
-        job_name = f"ss{self_superviced}_ae{autoencoder_epocs}_abs{autoencoder_batchsize}_sr{'-'.join(map(str, minmax_shape_reduction))}_ap{'-'.join(map(str, minmax_augmentation_percentage))}_mvsrp{mask_vs_rotation_percentage}_ctrab{classifier_train_batchsize}_cte{classifier_train_epochs}_ctesb{classifier_test_batchsize}_cteslr"
-
-        parameters.join_modalities(
-                ["ADC", "t2tsetra"],
-                encoder_method = encoder_method,
-                decoder_method=decoder_method, 
-                center_filter=center_filter, 
-                decoder_filters=decoder_filters, 
-                decode_try_upsample_first=decode_try_upsample_first,
-                encode_try_maxpool_first=encode_try_maxpool_first,
-                job_name = job_name,
-                classifier_train_batchsize = classifier_train_batchsize,
-                classifier_train_epochs = classifier_train_epochs,
-                classifier_test_batchsize = classifier_test_batchsize,
-                autoencoder_batchsize = autoencoder_batchsize,
-                autoencoder_epocs = autoencoder_epocs)
 
 
     pat_slices, pat_df = preprocess(parameters)
@@ -218,39 +112,18 @@ def main(*args, **kwargs):
         parameters.set_current(modality_name)
         if modality.skip_modality:
             continue
-
         print(modality.job_name)
             
         encoder = None
-        classifier = None
-        
-        if os.path.isdir(modality.C_path):
 
-            try:
-                classifier = tf.keras.models.load_model(modality.C_path, compile=False)
-                print(f"Loaded Classifier from {modality.C_path}")
-            except:
-                pass
-        #if os.path.isdir(os.path.abspath(model_path+"/encoder/")) and not classifier:
-        if os.path.isdir(modality.AE_path) and not classifier:
+        if os.path.isdir(modality.AE_path) :
             try:
                 encoder = tf.keras.models.load_model(modality.AE_path, compile=False)
                 print(f"Loaded Encoder from {modality.AE_path}")
             except:
                 pass
 
-        
-        if classifier:
-            _, _, y_test, patients_df = split_data(pat_slices, pat_df, autoencoder = False)
-            labels = {}
-            for split in patients_df.split.unique():
-
-                
-                label_split = patients_df.sort_values("pat_idx").drop_duplicates(["Subject ID", "Study Date"]).ClinSig.where(patients_df.split == split).dropna().replace({"non-significant": 0, "significant": 1})
-
-                labels[split] = tf.constant(label_split, dtype=tf.int32)
-            evaluate_classifier(classifier, y_test[modality.idx], labels["y_test"])
-        elif encoder:
+        if encoder:
             y_train, y_val, y_test, patients_df = split_data(pat_slices, pat_df, autoencoder = False)
 
             labels = {}
@@ -258,6 +131,8 @@ def main(*args, **kwargs):
 
                 
                 label_split = patients_df.sort_values("pat_idx").drop_duplicates(["Subject ID", "Study Date"]).ClinSig.where(patients_df.split == split).dropna().replace({"non-significant": 0, "significant": 1})
+
+                label_split = pd.get_dummies(pd.Series(label_split))
 
                 labels[split] = tf.constant(label_split, dtype=tf.int32)
 
@@ -272,7 +147,7 @@ def main(*args, **kwargs):
         else:
             
             y_train, y_val, patients_df = split_data(pat_slices, pat_df, autoencoder = True)
-            #print(f"\nCurrent parameters:\n{modality.mrkdown()}")
+            print(f"\nCurrent parameters:\n{modality.mrkdown()}")
         
             if modality.self_superviced:
                 trainDS, valDS = augment_build_datasets(y_train[modality.idx], y_val[modality.idx])
@@ -338,19 +213,9 @@ if __name__ == '__main__':
     
     
     if len(sys.argv)>1:
-        #print(sys.argv)
-        #kwargs={kw[0]:kw[1] for kw in [ar.split('=') for ar in sys.argv if ar.find('=')>0]}
-        #import json
-        #kwargs=json.loads(sys.argv[1])
         args = [x for x in sys.argv if '=' not in x]
         kwargs = {x.split('=')[0]: x.split('=')[1] for x in sys.argv if '=' in x}        
-        #print Func(*args, **kwargs)  
-
-        #print(f"kwargs = {kwargs}")
-
-        # main(**kwargs)
+        
         main(*args, **kwargs)
     else: main()
 
-
-# %%

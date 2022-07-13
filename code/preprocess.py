@@ -55,15 +55,7 @@ def parse_csv(data_path,type_lst):
 
 
 def load_slices(data_path,tags, nslices=False):
-    """
-    Given a path to the data, it loads the slices and stores them in a numpy array, if the Series Description contains the dictionary keys
-    
-    :param data_path: Path to the data folder
-    :param tags: Dictionary or list of tags that you want to read from the dicom file (Case insensitive)
-    :return: 
-        patients_arr: Array of images of shape (number of patients, number of modalities)
-        patients_df: Dataframe containing the information of the series
-    """
+
 
     print("\n"+f"Loading slices".center(50, '.'))
     start_time = time.time()
@@ -101,27 +93,14 @@ def load_slices(data_path,tags, nslices=False):
 
 
 def getsize(patients_arr,patients_df, force_dim={}):
-    """
-    Gather the size of each image and select the resize dimension based on the most common dimension if no dimension is specified
-    
-    :param patients_arr: The array of images
-    :param patients_df: The dataframe containing the patients information
-    :param force_dim: Dictonary containing type and dimension
-    :return: Dataframe with updated image dimensions
-    """
-
-
-    #TODO: change to minimum 32 in depth (z)
-    
 
     # Gather the size of each image
     dim_arr = []
     for _, pat in patients_df.iterrows():
             dim = patients_arr[pat.idx].GetSize()
-            #dim_arr.append((dim[1],dim[0],dim[2]))
             dim_arr.append((dim[2],dim[1],dim[0]))
             
-                #patients_arr[pat.idx].GetSize().transpose((1,0,2)))
+            
     patients_df["dim"] = dim_arr
         
     # Selecting the resize dimension based on the most common dimension
@@ -144,16 +123,6 @@ def getsize(patients_arr,patients_df, force_dim={}):
 
 
 def resample_pat(patients_arr,patients_df, force_dim={}, interpolator=sitk.sitkLinear, default_value=0):
-    """
-    Resample the images to the given resolution
-    
-    :param patients_arr: The array of images to resample
-    :param patients_df: The dataframe containing the patients information
-    :param force_dim: Dictonary containing type and dimension
-    :param interpolator: The interpolator to use for resampling
-    :param default_value: The value to assign to all voxels in the output image, defaults to 0
-    :return: the resampled images and the dataframe with the new dimensions.
-    """
 
     print("\n"+f"Resampling".center(50, '.'))
     start_time = time.time()
@@ -165,16 +134,11 @@ def resample_pat(patients_arr,patients_df, force_dim={}, interpolator=sitk.sitkL
     new_spacing = np.zeros(3)
     filter = sitk.ResampleImageFilter()
 
-    #TODO: save before and after image to show difference in the report. Due to resampling and antialiasing issues
-    #https://simpleitk.org/SPIE2018_COURSE/images_and_resampling.pdf
-    #https://stackoverflow.com/questions/48065117/simpleitk-resize-images
-
-
     for _, pat in patients_df.iterrows():
         pat_slices = patients_arr[pat.idx]
         old_size = pat_slices.GetSize()
         new_size = (pat.resize_dim[2],pat.resize_dim[1],pat.resize_dim[0])
-        #new_size = (pat.resize_dim[1],pat.resize_dim[0],pat.resize_dim[2])
+
         if  old_size == new_size: continue # Skip resize of images with correct dimensions
         old_spacing = pat_slices.GetSpacing()
         new_spacing = [old_spacing[i] / new_dim * old_size[i] for i,new_dim in enumerate(new_size)]
@@ -197,13 +161,6 @@ def resample_pat(patients_arr,patients_df, force_dim={}, interpolator=sitk.sitkL
 
 
 def normalize(patients_arr,patients_df):
-    """
-    Normalize the image set
-    
-    :param patients_arr: The array of images to be normalized
-    :param patients_df: The dataframe containing the patient information
-    :return: the normalized images.
-    """
 
     print("\n"+f"Normalization".center(50, '.'))
     start_time = time.time()
@@ -231,8 +188,6 @@ def normalize(patients_arr,patients_df):
     normalization_filter = sitk.IntensityWindowingImageFilter()        
     normalization_filter.SetOutputMaximum(1.0)
     normalization_filter.SetOutputMinimum(0.0)
-    #normalization_filter.SetOutputMaximum(255)
-    #normalization_filter.SetOutputMinimum(0)
     if (t2_upper_perc and t2_lower_perc):
         t2_upper = np.percentile(t2_upper_perc, 99)
         t2_lower = np.percentile(t2_lower_perc, 1)
@@ -254,62 +209,55 @@ def normalize(patients_arr,patients_df):
 
 
 def train_test_validation(patients_array, patients_dataframe, ratio):
-    """
-    The function takes in the image array and dataframe and the split ratio.
-    It then splits the array into training, test and validation sets and updates the dataframe.
-    
-    :param patients_arr: Image array
-    :param patients_df: Dataframe with image information
-    :param train_ratio: Ratio of training data
-    :param test_ratio: Ratio of training data
-    :param validation_ratio: Ratio of training data
-    :return: training, test and validation sets.
-    """
+
     old_pat_index = patients_dataframe.idx.apply(lambda x: x[0]).unique()
     patients_df=patients_dataframe.copy()
     patients_df=patients_df[~patients_df['ClinSig'].isna()].copy()
     pat_index = patients_df.idx.apply(lambda x: x[0]).unique()
-    #patients_arr = patients_arr[patients_df.idx.apply(lambda x: x[0]).unique()]
+    
     patients_arr = patients_array.copy()
     patients_arr = patients_arr[pat_index]
     
 
     print(f"\n{'Splitting'.center(50, '.')}")
-    n_removed = len(pat_index)-len(old_pat_index)#len(patients_df.idx.apply(lambda x: x[0]))
+    n_removed = len(pat_index)-len(old_pat_index)
     if n_removed:
         print(f"\nRemoved {n_removed} patients without labels")
     train_ratio,validation_ratio,test_ratio = ratio
-    # splitting the data into training, test and validation sets
-    #x_train, x_test, train_df, test_df = train_test_split(patients_arr , patients_df.idx.apply(lambda x: x[0]).unique(), train_size=(1-test_ratio), random_state=42, shuffle=True)
-
+    
 
     label_split = patients_df.drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
-
-    if modality.bootpercentage != 1:
-        patients_arr, _, bootpercentage, _ = train_test_split(patients_arr , pat_index, train_size=modality.bootpercentage, random_state=42, shuffle=True, stratify = label_split)
-        patients_df = patients_df[~patients_df.idx.apply(lambda x: x[0] not in bootpercentage)]
-        label_split = patients_df.drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
-        print(f"Selected bootpercentage = {modality.bootpercentage*100:.0f}% \nRemoved {len(pat_index)-len(patients_arr)} ")
-        pat_index = patients_df.idx.apply(lambda x: x[0]).unique()
 
     print(f"{len(patients_arr)} Patients left after removal")
 
     x_train, x_test, train_df, test_df = train_test_split(patients_arr , pat_index, train_size=(1-test_ratio), random_state=42, shuffle=True, stratify = label_split)
 
-    label_split = patients_df[~patients_df.idx.apply(lambda x: x[0] in test_df)].drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
+    label_split = patients_df[patients_df.idx.apply(lambda x: x[0] in train_df)].drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
     
-    x_train, x_val, train_df, val_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio),random_state=42, shuffle=True, stratify = label_split)
 
-    # Update the dataframe with the new indexes
-    df_idx = np.concatenate([train_df, test_df, val_df])
-    split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df,val_df]])
-    split_names = np.concatenate([["y_train"]*len(train_df), ["y_test"]*len(test_df), ["y_val"]*len(val_df)])
+    if modality.bootpercentage != 1:
+        
+        x_train, _, train_df, remove  = train_test_split(x_train , train_df, train_size=modality.bootpercentage / (1-test_ratio),random_state=42, shuffle=True, stratify = label_split)
+        
+        temp_df = patients_df.copy()[patients_df.idx.apply(lambda x: x[0] not in remove)]
+
+        label_split = temp_df[temp_df.idx.apply(lambda x: x[0] in train_df)].drop_duplicates(["Subject ID", "Study Date"]).ClinSig.dropna().replace({"non-significant": 0, "significant": 1})
+        
+        train_ratio = 0.7
+        validation_ratio = 0.3
+        
+        x_train, x_val, train_df, val_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio),random_state=42, shuffle=True, stratify = label_split)
+        df_idx = np.concatenate([train_df, test_df, val_df,remove])
+        split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df,val_df,remove]])
+        split_names = np.concatenate([["y_train"]*len(train_df), ["y_test"]*len(test_df), ["y_val"]*len(val_df), ["removed"]*len(remove)])
     
+    else:
+        x_train, x_val, train_df, val_df  = train_test_split(x_train , train_df, train_size=train_ratio/(train_ratio+validation_ratio),random_state=42, shuffle=True, stratify = label_split)
+        df_idx = np.concatenate([train_df, test_df, val_df])
+        split_idx = np.concatenate([np.arange(len(i)) for i in [train_df,test_df,val_df]])
+        split_names = np.concatenate([["y_train"]*len(train_df), ["y_test"]*len(test_df), ["y_val"]*len(val_df)])
+        
     patients_df[["split","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
-
-    # n_removed = len(pat_index)-len(old_pat_index)#len(patients_df.idx.apply(lambda x: x[0]))
-    # if n_removed:
-    #     print(f"\nRemoved {n_removed} patients without labels")
         
     print(f"\n|\tTrain\t|\tVal\t|\tTest\t|")
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|\t{(len(x_test)/len(patients_arr))*100:.0f}%\t|")
@@ -323,17 +271,6 @@ def train_test_validation(patients_array, patients_dataframe, ratio):
     return x_train, x_test, x_val, patients_df
 
 def train_val(patients_arr, patients_df, ratio):
-    """
-    The function takes in the image array and dataframe and the split ratio.
-    It then splits the array into training, test and validation sets and updates the dataframe.
-    
-    :param patients_arr: Image array
-    :param patients_df: Dataframe with image information
-    :param train_ratio: Ratio of training data
-    :param test_ratio: Ratio of training data
-    :param validation_ratio: Ratio of training data
-    :return: training, test and validation sets.
-    """
 
     print(f"\n{'Splitting'.center(50, '.')}")
     train_ratio,test_ratio = ratio
@@ -346,23 +283,14 @@ def train_val(patients_arr, patients_df, ratio):
     split_names = np.concatenate([["y_train"]*len(train_df), ["y_val"]*len(val_df)])
     patients_df[["split","pat_idx"]] = patients_df.idx.apply(lambda x: pd.Series([split_names[df_idx == x[0]][0],(split_idx[df_idx == x[0]][0],x[1])]))
     
-
     print(f"\n|\tTrain\t|\tVal\t|")
     print(f"|\t{(len(x_train)/len(patients_arr))*100:.0f}%\t|\t{(len(x_val)/len(patients_arr))*100:.0f}%\t|")
     print(f"|\t{len(x_train)}\t|\t{len(x_val)}\t|")
-
 
     return x_train, x_val, patients_df
 
 
 def image_to_np_reshape(train_test_val_split,patients_df,channels=1):
-    """
-    Convert the sitk image to np.array and reshape it to (num_of_slices, height, width, channels)
-    
-    :param train_test_val_split: The output of the image_to_np_reshape function
-    :param patients_df: The dataframe containing the patient information
-    :return: a list of 3 np.arrays. Each array contains the images of the patients in the train, test and validation sets.
-    """
 
     print(f"\n{'Converting sitk image to np.array and reshape'.center(50, '.')}")
 
@@ -374,26 +302,17 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=1):
 
         reshaped_arr = np.empty(patients_arr.shape[1],dtype=object)
         for i in range(len(reshaped_arr)):
-            # reshaped_arr[i] = np.empty(shape=((patients_arr.shape[0],*patients_arr[0,i].GetSize())),dtype=np.float32)
             dim = patients_arr[0,i].GetSize()
-            
             reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0],channels)),dtype=np.float32)
-
-            # reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[2],dim[1],dim[0])),dtype=np.float32)
-
-            #reshaped_arr[i] = np.zeros(shape=((patients_arr.shape[0],dim[1],dim[0],dim[2],channels)),dtype=np.float32)
             
         for j,pat in enumerate(patients_arr):
-            for k,pat_slices in enumerate(pat):
-                
+            for k,pat_slices in enumerate(pat):                
                 reshaped_arr[k][j] = tf.repeat(tf.expand_dims(tf.cast(sitk.GetArrayFromImage(pat_slices),tf.float32),-1), channels, -1)
-                
-        
+
         for i in range(len(reshaped_arr)):
             reshaped_arr[i]=tf.convert_to_tensor(reshaped_arr[i],dtype=tf.float32)
         output.append(reshaped_arr)
-    
-    
+       
     patients_df[["tag_idx","pat_idx"]] = patients_df.pat_idx.apply(lambda x: pd.Series([x[1],x[0]]))
     
     print(f"\nConversion and reshape finished {(time.time() - start_time):.0f} s")
@@ -402,23 +321,7 @@ def image_to_np_reshape(train_test_val_split,patients_df,channels=1):
 
 
 def preprocess(parameters, nslices = False):
-    """
-    Loads the slices from the data path, resamples the slices to the desired resolution, normalizes the
-    slices and returns the resampled slices and the dataframe
-
-    If size is set to None, then the most common size will be used
-        Examples:
-            tags = {"ADC":(20,86,128),"t2tsetra": (20,320,320)} 
-
-            tags = {"T2TSETRA": (32,320,320), "adc": None} 
-
-            tags = {"ADC": None}     
     
-    :param data_path: path to the folder containing the data
-    :param tags: a dictionary of tags and their corresponding sizes
-    :return: the preprocessed slices and the dataframe with the metadata.
-    """
-
     print(f"Preprocess started".center(50, '_'))
     start_time = time.time()
 
