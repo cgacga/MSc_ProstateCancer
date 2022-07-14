@@ -7,7 +7,7 @@ In this work, we explored a self-supervised approach to deal with a limited amou
 We implemented a self-supervised approach able to integrate bi-parametric MRI (ADC and T2w). 
 The approach were tested with classification between abnormal (MRI with tumors) and control images (without tumors) in a limited amount of data regime
 
-## Installation
+## Getting Started
 
 ### Prerequisites
    - [PROSTATEx Challenge dataset](https://wiki.cancerimagingarchive.net/pages/viewpage.action?pageId=23691656)
@@ -17,15 +17,14 @@ The approach were tested with classification between abnormal (MRI with tumors) 
 
    - Clone the repository
    
-    $ git clone https://github.com/cgacga/MSc_ProstateCancer
+    git clone https://github.com/cgacga/MSc_ProstateCancer
 
    - Follow the quickstart guide [UiS AI Lab - Slurm](https://github.com/tlinjordet/gpu_ux_uis#environment-setup-script)
      - Replace the bash file with [slurm/env_setup.sh](slurm/env_setup.sh)
 
-
 ## Running the tests
 
-Setting global parameters:
+### Setting global parameters:
 ```python
 parameters.set_global(
         data_path="../data/manifest-A3Y4AE4o5818678569166032044/", 
@@ -54,7 +53,7 @@ parameters.set_global(
         )
 ```
 
-Adding MRI sequence:
+### Adding MRI sequence:
   All parameters from global can be changed on a MRI sequence level if needed.
 
 ```python
@@ -67,7 +66,7 @@ parameters.add_modality(
     )
 ```
 
-Adding bi-parametric MRI
+### Adding bi-parametric MRIs
 ```python
 parameters.add_modality(
         modality_name = "t2tsetra", 
@@ -86,6 +85,13 @@ parameters.join_modalities(
         merge_method = "avg" # Merging layer ["concat","avg","add","max","multiply"]
         )
 ```
+
+### Schedule the job
+
+```bash
+sbatch slurm/start_job.sh
+```
+
 ### Sample
 
 ## Built With
